@@ -82,6 +82,9 @@ This is the hardest step. In order:
 1. **Adapt the upstream's existing tests.** Find the test file closest to the affected code and add a failing case that mirrors the consumer-side symptom.
 2. **Use the project's test harness** — do not invent a custom setup.
 3. **Bail out** if the bug depends on consumer-stack specifics the upstream can't reproduce (specific framework version, DB driver, env-specific behaviour). Switch to Phase 6 (issue-only).
+4. **Tractability gate (BLOCKING).** Before writing the fix, ask: *is the fix scope what the issue framing suggested?* Two failure modes to catch:
+   - **Feature gone, not bug.** The issue says "X is missing/broken in version Y" but X is wholly absent from the new code paths (not just typed-out). The "fix" is a re-implementation, not a bug fix — maintainer intent is required. Switch to Phase 6 (issue-only) with analysis: "feature X is absent in v1 — was this intentional or an oversight?" Documented case: `drizzle-team/drizzle-orm#5755` framed as a missing type field, but the v1 rewrite removed the entire `casing` runtime pipeline. Adding the type alone would ship a misleading API.
+   - **Half-fix risk.** The minimal fix (e.g. one type addition) makes TS stop erroring but leaves runtime semantics broken. Don't ship half-fixes — they hide the bug from users. Either fix both or switch to Phase 6.
 
 Confirm the new test fails for the **right** reason before writing a fix.
 

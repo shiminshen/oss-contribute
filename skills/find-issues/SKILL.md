@@ -85,6 +85,8 @@ Drop the candidate if **any** of these is true:
 - The most recent maintainer comment says "we're working on this" / "PR incoming".
 - It's labelled `needs: info`, `wontfix`, `discussion`, `rfc`, or similar non-actionable.
 - It's older than 6 months with no activity.
+- **Scope/intent ambiguity.** If the issue body says "X is missing" or "X doesn't work in version Y" against a `vN.0.0-beta/rc.M` of a package mid-rewrite, briefly check (via `gh api repos/.../contents/...` + grep) whether X exists in the new code paths. If X is **wholly absent** (not just typed-out), the "fix" is a re-implementation, not a bug fix — maintainer intent is required. Demote to issue-comment-only path, not drive-by PR. Documented failure case: `drizzle-team/drizzle-orm#5755` filed against `drizzle-kit@1.0.0-rc.2` reported "casing missing from Config type"; on the `beta` branch `casing` is absent from both type and runtime, so the v1 rewrite intentionally or accidentally dropped the feature — adding the type field alone would ship a misleading API.
+- **Invitation-only upstream.** If the upstream's `docs/contributing.md`, `CONTRIBUTING.md`, or `.github/pull_request_template.md` contains phrases like "invitation only", "do not accept unsolicited", "closed without review", drop the candidate. Documented failure case: `openai/codex` accepts external PRs by invitation only — uninvited PRs are closed unread.
 
 ### Duplicate-PR search
 
