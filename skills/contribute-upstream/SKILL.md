@@ -99,6 +99,14 @@ Confirm the new test fails for the **right** reason before writing a fix.
 - Run the targeted test → the full affected file → the project's `typecheck`.
 - If the fix touches a public API, update `docs/` per the project's docs convention.
 - Add a regression marker if the project uses one (e.g. `@see https://github.com/.../issues/<n>` block above the test).
+- **Convention audit (BLOCKING before commit).** When extending an existing spec or source file, your new code must match the patterns the maintainers already chose — not just pass tests. Re-read the surrounding file with this checklist:
+  - **Cast types**: does the file declare top-level named types (e.g. `InspectorInternals`) with a helper function, or inline ad-hoc casts? Match it.
+  - **Mock factories**: do existing factories return raw state (Maps, arrays) or only controller functions (`emitX`, `setY`)? Match it.
+  - **Global stubs**: are they in `beforeEach` alongside others, or inline per test? Match it.
+  - **Helper naming**: does the file use `getX` / `createX` / `emitX` consistently? Match the verb form.
+  - **Comment density and tone**: does the file explain WHY each test exists with a multi-line preamble, or one-liners? Match it.
+  - **`await` patterns**: is there a standard "after every state change, `await component.updateComplete`" pattern? Apply it.
+  Documented failure: CopilotKit#4798 — first commit had three style divergences (ad-hoc inline cast, fetch stub repeated per test instead of `beforeEach`, raw Map exposed instead of factory controller functions). User pushed back, required a cleanup follow-up commit that produced review churn. The convention audit would have caught all three before commit.
 
 ## Phase 5 — PR prep
 

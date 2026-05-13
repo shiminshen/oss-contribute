@@ -161,6 +161,14 @@ Cache the per-repo signals for the duration of one `find-issues` invocation (don
 
 ## Phase 4 — Output
 
+**Pre-output freshness re-check (BLOCKING).** The parallel scouts in Phase 2/3 may have run minutes ago. On Hot repos, an exact-fix PR can land in that window — and your shortlist will be stale. Before emitting the ranked list, run a final batched verification pass: for each top-5 candidate, in ONE message run:
+
+- `gh search prs --repo <owner>/<repo> --state open --limit 5 "#<n>"`
+- One or two distinctive backticked identifiers from the issue body
+- `gh issue view <n> --json closedByPullRequestsReferences,assignees,state`
+
+This is cheap (~15 parallel calls) and catches the scout-to-handoff gap. Drop any candidate where a new PR has appeared. Documented failure: 2026-05-13 hunt — `mastra-ai/mastra#16514` passed the scout's dup-PR check; PR #16545 ("fix(durable): handle object form of instructions in preparation.ts") opened ~10 minutes later. Caught only when the user explicitly asked "did you check no existing PR?"
+
 Show the top 5 as a compact ranked list:
 
 ```
