@@ -41,7 +41,17 @@ Do all of the following before touching any code. If any step surfaces a blocker
    - `package.json#packageManager` and `.nvmrc`
 3. **Check signs of life.** Recent merged PRs (last 30d), issue response cadence, last release. If the project looks dormant or hostile to outside PRs, surface that and ask whether to continue.
 4. **Check whether discussion is required.** Some projects explicitly require an issue before a feature PR and will close cold feature PRs. Bug fixes are usually fine. For features, file or find the issue first.
-5. **Duplicate search.** `gh search issues` and `gh search prs` (open + closed) for the symptom on the upstream repo. For each candidate issue, also run `gh issue view <n> --json assignees,closedByPullRequestsReferences,timelineItems` to catch work that the symptom-keyword search misses. Outcomes:
+5. **Duplicate search.** Title-keyword searches miss PRs whose title describes the *implementation* rather than the *symptom*. Search by tokens extracted from the issue body, in this order; stop at the first PR hit:
+
+   1. **The issue number itself.** `gh search prs --repo <owner>/<repo> "<n>"` — many PR descriptions reference the issue.
+   2. **URL-encoded or other distinctive literals** in the issue body — `%5F`, error codes, magic strings.
+   3. **Backticked code identifiers** from the issue body — function names, file paths, type names.
+   4. **Error message fragments** quoted in the body, if any.
+   5. Title-keyword paraphrases as a last resort, not a first resort.
+
+   Documented failure case: issue titled "Layouts for paths that start with underscore (%5F)…" had an open PR titled "fix(typegen): normalize %5F to _…" — caught only by the `%5F` literal-token search, not by title-keyword variants.
+
+   Also run `gh issue view <n> --json assignees,closedByPullRequestsReferences,comments` on every candidate issue. Outcomes:
    - Open issue, no assignee, no linked PR → add the user's extra context as a comment; ask in the same comment whether you can take it (some projects require an explicit "assign me" / `/assign` before you start).
    - Open issue **with an assignee** but no PR yet → comment asking if they're still actively working on it before duplicating effort. Do not start work until you hear back or the assignee is removed.
    - Open issue **with a linked open PR** → tell the user; offer to review/test that PR, not compete with it.
@@ -52,6 +62,10 @@ Do all of the following before touching any code. If any step surfaces a blocker
 8. **Confirm with user.** Summarise findings (repo, version, dup status, conventions, CLA, branch target, changeset y/n, chosen GitHub account, chosen git identity) in ≤10 lines. Get explicit go-ahead before Phase 2.
 
 ## Phase 2 — Setup
+
+0. **Re-verify duplicate (BLOCKING).** Re-run the duplicate-PR search from Phase 1 step 5, *right now*, immediately before the clone. Hunt → contribute can take minutes to days; PRs land in that window. Cloning a large monorepo costs 15–25 minutes — confirm it's still worth doing.
+
+   If a new PR has appeared, stop and offer to review/test it instead of competing.
 
 1. Clone the user's **fork** (create one with `gh repo fork` first if absent) to a **sibling directory** of the consumer repo — never inside it.
 2. Install deps with the project's pinned package manager (`corepack prepare` / `corepack enable` if needed). Honour `.nvmrc`.

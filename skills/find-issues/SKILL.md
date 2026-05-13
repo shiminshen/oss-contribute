@@ -74,10 +74,25 @@ Drop the candidate if **any** of these is true:
 
 - It has an assignee.
 - `closedByPullRequestsReferences` is non-empty (a PR is already linked).
-- A PR referencing the issue exists in `gh search prs`.
+- An open PR for the same fix exists (see "Duplicate-PR search" below).
 - The most recent maintainer comment says "we're working on this" / "PR incoming".
 - It's labelled `needs: info`, `wontfix`, `discussion`, `rfc`, or similar non-actionable.
 - It's older than 6 months with no activity.
+
+### Duplicate-PR search
+
+Issue-title keywords miss PRs whose title describes the *implementation* rather than the *symptom*. Search by tokens extracted from the issue body, not by paraphrases of the title.
+
+For each candidate, run `gh search prs --repo <owner>/<repo> --state open <token>` against each of these, in order, and stop at the first hit:
+
+1. **The issue number itself.** `"#93700"` and bare `"93700"` — many PR descriptions reference it.
+2. **URL-encoded or other distinctive literals** in the issue body — `%5F`, error codes, magic strings.
+3. **Backticked code identifiers** from the issue body — function names, file paths, type names (e.g. `` `LayoutRoutes` ``, `` `buildUpdateSet` ``).
+4. **Error message fragments** quoted in the body, if any.
+
+A title-keyword search alone is not enough. Documented failure case: issue titled "Layouts for paths that start with underscore (%5F)…" had an open PR titled "fix(typegen): normalize %5F to _…" — caught only by the `%5F` token search.
+
+If a PR hit appears, drop the candidate.
 
 For each survivor, score on:
 
