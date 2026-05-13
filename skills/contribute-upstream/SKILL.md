@@ -45,6 +45,10 @@ Do all of the following before touching any code. If any step surfaces a blocker
 
    Documented case: 2026-05-14, `mastra-ai/mastra#16422` — chosen from a fresh `find-issues` shortlist, scout's dup-PR check showed `assignees: []`. ~30 minutes later (after rules-of-the-road scout + clone + reading source + writing the fix + writing tests + commit), the freshness re-check just before push surfaced that `@intojhanurag` had been assigned in the interim. Half-day of work avoided being submitted as a competing PR. Moving the gate to Phase 1 step 0 would have caught it before any clone or code-writing.
 
+0a. **Adjacent-stalled-PR check (BLOCKING).** Even if the issue passes the freshness check, search for any open PR in the *same code area* that has been stalled for weeks. If maintainers haven't reviewed a sibling PR in 30+ days, your PR will likely sit too. Run a quick `gh pr view <stalled-pr-number> --json reviews,comments,reviewDecision` — zero reviews + zero comments + REVIEW_REQUIRED for 30+ days is the "dead area" signal. Surface to the user before investing.
+
+   Documented case: 2026-05-14, `vercel/ai#13962` passed freshness but the adjacent PR #12924 ("pass abort signal to reconnectToStream so `stop()` works on resumed streams") — same `Chat.stop()` code area — had been open since 2026-02-27 with zero reviews, zero comments, REVIEW_REQUIRED. ~75 days of total maintainer silence in that area. A fresh PR for #13962 would face the same fate.
+
 1. **Resolve the upstream repo.** From the consumer's `package.json` + lockfile, get the installed version and the `repository` URL. Disambiguate (workspace, fork, mirror) with the user if needed.
 2. **Read the rules of the road.** **Strongly prefer dispatching this to a `general-purpose` subagent** — many file fetches, mostly null results, content dumps that pollute the main context. The subagent returns a compact verdict (≤15 lines) covering: contribution policy (open / discuss-first / invitation-only — HARD STOP if invitation-only), signed-commits requirement, CLA, branch target, changeset usage, packageManager + node version. Pass the upstream `owner/repo` and the issue number for context.
 
