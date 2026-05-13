@@ -49,6 +49,15 @@ Do all of the following before touching any code. If any step surfaces a blocker
 
    Documented case: 2026-05-14, `vercel/ai#13962` passed freshness but the adjacent PR #12924 ("pass abort signal to reconnectToStream so `stop()` works on resumed streams") — same `Chat.stop()` code area — had been open since 2026-02-27 with zero reviews, zero comments, REVIEW_REQUIRED. ~75 days of total maintainer silence in that area. A fresh PR for #13962 would face the same fate.
 
+0b. **Already-fixed-on-main check (BLOCKING).** Read the version the reporter is on from the issue body. Compare to current `main`'s version + recent commits to the file path the reporter mentions. If a fix-shaped commit landed *between the reporter's version and main*, the bug may already be fixed; the reporter just needs to upgrade. Verify by running the existing tests for that file (if they assert the behavior the reporter claims is broken). If they pass on main, drop the candidate and offer to comment on the issue pointing them to the version that fixes it.
+
+   Three documented cases on 2026-05-14:
+   - `assistant-ui#4009` — reporter on v0.14.0; dosu bot's own follow-up comment said "this has been addressed in recent PRs merged to main: PR #3927 (May 5), PR #3954" — but the issue stayed open because the merged PRs didn't formally close it.
+   - `mastra#16383` — reporter on `@mastra/schema-compat@1.1.3`; current main is 1.2.10 with PR #14624 (2026-04-13) landing "fix(schema-compat): improve provider structured output and tool-call compatibility" 4 weeks before the issue was filed. Existing strict-mode tests in `openai.test.ts` (792/792 green) explicitly assert `.optional()` → strict-mode compliant schema.
+   - `drizzle-orm#5755` — reporter on `drizzle-kit@1.0.0-rc.2` (mid-rewrite beta); the named `casing` config feature was wholly absent in the new code paths — but the inverse shape: NOT already fixed, it was intentionally / accidentally dropped. Same family of "filed against the wrong slice of the version axis."
+
+   Cheap check: `gh api 'repos/<owner>/<repo>/commits?path=<file>&per_page=15' --jq '.[] | {sha: .sha[:8], date: .commit.author.date, msg: .commit.message | split("\n")[0]}'` against the file the reporter references, then look for a fix-shaped commit between the reporter's version-release date and now.
+
 1. **Resolve the upstream repo.** From the consumer's `package.json` + lockfile, get the installed version and the `repository` URL. Disambiguate (workspace, fork, mirror) with the user if needed.
 2. **Read the rules of the road.** **Strongly prefer dispatching this to a `general-purpose` subagent** — many file fetches, mostly null results, content dumps that pollute the main context. The subagent returns a compact verdict (≤15 lines) covering: contribution policy (open / discuss-first / invitation-only — HARD STOP if invitation-only), signed-commits requirement, CLA, branch target, changeset usage, packageManager + node version. Pass the upstream `owner/repo` and the issue number for context.
 
