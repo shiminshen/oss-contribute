@@ -31,14 +31,18 @@ Profile is **optional** for this skill — the GitHub-account question is asked 
 Do all of the following before touching any code. If any step surfaces a blocker, stop and tell the user; do not proceed unilaterally.
 
 1. **Resolve the upstream repo.** From the consumer's `package.json` + lockfile, get the installed version and the `repository` URL. Disambiguate (workspace, fork, mirror) with the user if needed.
-2. **Read the rules of the road.** Fetch and read:
-   - `CONTRIBUTING.md` (or `.github/CONTRIBUTING.md`)
+2. **Read the rules of the road.** **Strongly prefer dispatching this to a `general-purpose` subagent** — many file fetches, mostly null results, content dumps that pollute the main context. The subagent returns a compact verdict (≤15 lines) covering: contribution policy (open / discuss-first / invitation-only — HARD STOP if invitation-only), signed-commits requirement, CLA, branch target, changeset usage, packageManager + node version. Pass the upstream `owner/repo` and the issue number for context.
+
+   Fetch and read each of these paths; treat the **first hit** as authoritative for that doc type. Filenames vary in case and folder — try every variant before giving up:
+   - **Contributing policy**: `CONTRIBUTING.md`, `.github/CONTRIBUTING.md`, `docs/CONTRIBUTING.md`, `docs/contributing.md`, `docs/contribute.md`. **Many projects put the real policy at `docs/contributing.md` while the root file is missing or stub** — keep searching after the first 404.
    - `CODE_OF_CONDUCT.md`
-   - `SECURITY.md` — if the bug is a security issue, **STOP**: most projects forbid public disclosure. Redirect to the project's security contact.
-   - `.github/PULL_REQUEST_TEMPLATE.md`
+   - `SECURITY.md` (also try `.github/SECURITY.md`) — if the bug is a security issue, **STOP**: most projects forbid public disclosure. Redirect to the project's security contact.
+   - **PR template**: `.github/PULL_REQUEST_TEMPLATE.md` AND `.github/pull_request_template.md` (case matters on GitHub's API). Also `PULL_REQUEST_TEMPLATE.md` at root. **The template often restates policy** ("invitation only", "must link issue", "do not open without issue first") — read it as policy, not just formatting.
    - `CLAUDE.md` / `AGENTS.md` at repo root (project-specific AI guidance)
    - `.changeset/config.json` (does the project use changesets?)
    - `package.json#packageManager` and `.nvmrc`
+
+   **Invitation-only / closed-contribution check (HARD STOP).** Some projects (e.g. `openai/codex`) accept external PRs **by invitation only** and close uninvited PRs unread. Scan the contributing doc and PR template for phrases like "invitation only", "do not accept unsolicited", "closed without review", "external contributions are closed". If found, STOP — do not proceed to Phase 2 clone. Instead, switch to Phase 6 (issue-only path) and offer to comment on the issue with analysis + suggested fix, which is what these projects explicitly invite. Surface this clearly to the user before any further work.
 3. **Check signs of life.** Recent merged PRs (last 30d), issue response cadence, last release. If the project looks dormant or hostile to outside PRs, surface that and ask whether to continue.
 4. **Check whether discussion is required.** Some projects explicitly require an issue before a feature PR and will close cold feature PRs. Bug fixes are usually fine. For features, file or find the issue first.
 5. **Duplicate search.** Title-keyword searches miss PRs whose title describes the *implementation* rather than the *symptom*. Search by tokens extracted from the issue body, in this order; stop at the first PR hit:

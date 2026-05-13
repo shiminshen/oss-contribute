@@ -44,7 +44,14 @@ The profile covers:
 
 ## Phase 2 — Discover candidates
 
-For each repo in the (filtered) watched list, in parallel:
+**Strongly prefer dispatching one `general-purpose` subagent per repo**, running them in a single message for true parallelism. Each subagent: fetches recent open issues (last 7d, sorted by created), filters to bugs with 0–1 comments, runs the token-based dup-PR search from Phase 3 against each, and returns a compact list (≤5 candidates × ≤3 lines each) with verdict. Aggregate in the main agent. This keeps raw `gh search issues` JSON out of the main context window, which matters because the JSON is verbose and the main agent only needs the curated list.
+
+Per-repo subagent prompt skeleton:
+- Repo: `<owner>/<repo>`
+- Profile stack: `<langs/frameworks from profile>` (only for relevance scoring; do not filter by GFI/HW labels — see profile rule)
+- Return: top 5 ripe candidates (no dup PRs by token search, no assignees, ≤1 comment, opened in last 7d), one line each with `repo#N — title — why-ripe`. If 0 ripe, say "0 ripe in this repo".
+
+Fallback (skip subagents): run for each repo in the (filtered) watched list, in parallel:
 
 ```
 gh search issues \
