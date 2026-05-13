@@ -35,43 +35,30 @@ All three skills read from one shared profile so settings never drift.
 
 ## Install
 
-> **Not yet on the official Anthropic marketplace.** Two install paths — both work today.
-
-### Path A — Install from this GitHub repo (recommended)
-
-In Claude Code:
-
-```
-/plugin marketplace add shiminshen/oss-contribute
-/plugin install oss-contribute@oss-contribute
-```
-
-That's it. The three skills appear under the `oss-contribute:` prefix in autocomplete.
-
-### Path B — Clone locally (for development or forking)
+> **Not yet on the official Anthropic marketplace.** Clone locally and install from the path.
 
 ```bash
 # 1. Clone the repo anywhere on your machine
 git clone https://github.com/shiminshen/oss-contribute.git
 cd oss-contribute
+```
 
-# 2. In Claude Code, add the local clone as a marketplace
-#    (use the absolute path)
+Then in Claude Code (use the absolute path to your clone):
+
+```
 /plugin marketplace add /absolute/path/to/oss-contribute
 /plugin install oss-contribute@oss-contribute
 ```
 
-Use this path if you want to edit the skills, run `git pull` to track upstream changes, or fork-and-contribute. No `npm install` or build step — the plugin is plain markdown.
+No `npm install` or build step — the plugin is plain markdown.
 
 ### Verify the install
-
-After either path:
 
 ```
 /oss-contribute:profile
 ```
 
-Expected output: `No profile found. … Run: /oss-contribute:profile edit to set one up.` That message means the skills loaded correctly.
+Expected output: `No profile found. … Run: /oss-contribute:profile edit to set one up.` That message means the three skills loaded correctly under the `oss-contribute:` namespace.
 
 ### First-run setup
 
@@ -87,15 +74,16 @@ Walks you through:
 - Default time budget (`30m` / `1h` / `weekend`)
 - What "ripe" means to you (heuristic seed for `find-issues` ranking)
 
-Profile is written to `$CLAUDE_PLUGIN_DATA/profile.md` (survives plugin updates) when installed as a plugin, or `~/.claude/skills/oss-contribute/profile.md` in local-dev mode.
+Profile is written to `$CLAUDE_PLUGIN_DATA/profile.md` when installed as a plugin (survives plugin updates), or `~/.claude/skills/oss-contribute/profile.md` in local-dev mode.
 
 ### Update later
 
-```
-/plugin update oss-contribute
+```bash
+cd /path/to/oss-contribute
+git pull
 ```
 
-Or, for the cloned path: `git pull` in the repo, then `/plugin reload oss-contribute` (or uninstall + install).
+Then in Claude Code: `/plugin reload oss-contribute` (or uninstall + reinstall).
 
 ## The reactive flow (killer feature)
 
