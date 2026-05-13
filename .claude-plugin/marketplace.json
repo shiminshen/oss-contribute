@@ -1,0 +1,40 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "oss-contribute",
+  "description": "OSS contribution workflow for Claude Code — find ripe issues, ship upstream fixes, track your contribution pipeline.",
+  "owner": {
+    "name": "shiminshen"
+  },
+  "metadata": {
+    "description": "OSS contribution workflow for Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "oss-contribute",
+      "source": "./",
+      "description": "Turn the bugs you hit in third-party dependencies into upstream contribution PRs — without leaving your project.",
+      "version": "0.1.0",
+      "author": {
+        "name": "shiminshen"
+      },
+      "homepage": "https://github.com/shiminshen/oss-contribute",
+      "repository": "https://github.com/shiminshen/oss-contribute",
+      "license": "MIT",
+      "keywords": [
+        "claude-code",
+        "open-source",
+        "contribution",
+        "github",
+        "workflow"
+      ],
+      "category": "workflow",
+      "tags": [
+        "open-source",
+        "contribution",
+        "github",
+        "developer-tools"
+      ],
+      "strict": false
+    }
+  ]
+}

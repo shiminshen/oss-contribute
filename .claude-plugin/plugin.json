@@ -1,0 +1,22 @@
+{
+  "name": "oss-contribute",
+  "version": "0.1.0",
+  "description": "Turn the bugs you hit in third-party dependencies into upstream contribution PRs — without leaving your project. Three skills covering the OSS-contribution-as-career-ops loop: find ripe issues, ship the fix, and a shared profile so preferences never drift.",
+  "author": {
+    "name": "shiminshen",
+    "url": "https://github.com/shiminshen"
+  },
+  "homepage": "https://github.com/shiminshen/oss-contribute",
+  "repository": "https://github.com/shiminshen/oss-contribute",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "claude-code-plugin",
+    "skills",
+    "open-source",
+    "contribution",
+    "github",
+    "workflow",
+    "developer-tools"
+  ]
+}

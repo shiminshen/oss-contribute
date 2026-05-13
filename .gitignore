@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local plugin data (in case anyone clones into a Claude Code data dir)
+plugin-data/
+.claude-data/
+
+# Local Claude artifacts that shouldn't ship
+.claude/scheduled_tasks.lock
