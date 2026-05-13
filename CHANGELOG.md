@@ -12,6 +12,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pipeline` skill — status of your open/merged PRs across forks
 - `log` skill — generate a portfolio entry from merged contributions
 
+## [0.2.0] — 2026-05-13
+
+### Added — pre-clone / pre-PR safety gates
+
+Three rounds of preflight hardening, each grounded in a documented failure case from the session that produced them:
+
+- **`find-issues` Phase 3 — scope/intent ambiguity drop criterion.** For "X is missing/broken in vN.0.0-beta/rc.M" bugs against packages mid-rewrite, briefly verify X exists in the new code paths before classifying as ripe. If wholly absent, the "fix" is a re-implementation, not a bug fix — demote to issue-comment-only. Lesson from `drizzle-team/drizzle-orm#5755` where the v1 rewrite dropped the entire `casing` runtime pipeline; adding the type alone would have shipped a misleading API.
+- **`find-issues` Phase 3 — invitation-only upstream drop criterion.** If `docs/contributing.md`, `CONTRIBUTING.md`, or `.github/pull_request_template.md` contains "invitation only" / "do not accept unsolicited" / "closed without review", drop the candidate. Lesson from `openai/codex` closing uninvited PRs unread.
+- **`contribute-upstream` Phase 3 — tractability gate (BLOCKING).** Before writing the fix: catch "feature gone, not bug" (re-implementation framed as bug fix) and "half-fix risk" (type-only patches that suppress TS errors while leaving runtime broken). Switch to Phase 6 (issue-only) when either applies.
+
+### Changed
+
+- **`contribute-upstream` Phase 1 step 2** now expands documentation lookups to include `docs/CONTRIBUTING.md`, `docs/contributing.md`, lowercase `.github/pull_request_template.md`, etc., and treats the first hit as authoritative. Many projects put the real policy at `docs/contributing.md` while the root file is missing or a stub.
+- **`contribute-upstream` Phase 2 step 0 (new)** — re-verify the duplicate-PR search immediately before clone. Catches PRs landed in the hunt → contribute window; saves 15–25 min of wasted clone time. Lesson from `vercel/next.js#93700` ↔ `#93725`.
+- **Both skills now strongly recommend `general-purpose` subagent dispatch** for context-heavy phases (per-repo discovery in `find-issues` Phase 2; rules-of-the-road preflight in `contribute-upstream` Phase 1 step 2). Keeps raw JSON / doc content out of the main agent's context.
+- **Both skills' duplicate-PR search is now token-based** (issue number, URL-encoded literals, backticked identifiers, error fragments) rather than title-keyword. Title keywords miss PRs whose title describes the implementation. Lesson from `vercel/next.js#93700` where the closing PR `#93725` was findable only via the `%5F` literal token.
+
 ## [0.1.0] — 2026-05-13
 
 ### Added
