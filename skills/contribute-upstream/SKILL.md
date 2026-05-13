@@ -30,6 +30,21 @@ Profile is **optional** for this skill — the GitHub-account question is asked 
 
 Do all of the following before touching any code. If any step surfaces a blocker, stop and tell the user; do not proceed unilaterally.
 
+0. **Freshness re-check (FIRST, BLOCKING).** Before *any* other Phase 1 work — before resolving the upstream repo, before dispatching the rules-of-the-road subagent, before reading anything — re-verify the issue is still ripe RIGHT NOW. Even if you just hand-picked it from `find-issues` Phase 4 minutes ago. State changes fast on Hot repos.
+
+   Single batched call:
+   - `gh issue view <n> --repo <owner>/<repo> --json assignees,closedByPullRequestsReferences,state`
+   - `gh search prs --repo <owner>/<repo> --state open --limit 5 "#<n>"`
+   - One or two distinctive backticked identifiers from the issue body
+
+   Drop and surface to the user immediately if **any** of these is true:
+   - Issue now has an assignee (someone is on it — competing is rude)
+   - `closedByPullRequestsReferences` is non-empty (a PR is already linked)
+   - A token-search PR hits the same fix surface
+   - Issue state is no longer `OPEN`
+
+   Documented case: 2026-05-14, `mastra-ai/mastra#16422` — chosen from a fresh `find-issues` shortlist, scout's dup-PR check showed `assignees: []`. ~30 minutes later (after rules-of-the-road scout + clone + reading source + writing the fix + writing tests + commit), the freshness re-check just before push surfaced that `@intojhanurag` had been assigned in the interim. Half-day of work avoided being submitted as a competing PR. Moving the gate to Phase 1 step 0 would have caught it before any clone or code-writing.
+
 1. **Resolve the upstream repo.** From the consumer's `package.json` + lockfile, get the installed version and the `repository` URL. Disambiguate (workspace, fork, mirror) with the user if needed.
 2. **Read the rules of the road.** **Strongly prefer dispatching this to a `general-purpose` subagent** — many file fetches, mostly null results, content dumps that pollute the main context. The subagent returns a compact verdict (≤15 lines) covering: contribution policy (open / discuss-first / invitation-only — HARD STOP if invitation-only), signed-commits requirement, CLA, branch target, changeset usage, packageManager + node version. Pass the upstream `owner/repo` and the issue number for context.
 
