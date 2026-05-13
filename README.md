@@ -35,18 +35,67 @@ All three skills read from one shared profile so settings never drift.
 
 ## Install
 
-> **Not yet on the official Anthropic marketplace.** Install directly from this repo:
+> **Not yet on the official Anthropic marketplace.** Two install paths — both work today.
+
+### Path A — Install from this GitHub repo (recommended)
+
+In Claude Code:
 
 ```
 /plugin marketplace add shiminshen/oss-contribute
 /plugin install oss-contribute@oss-contribute
 ```
 
-After install, set up your profile:
+That's it. The three skills appear under the `oss-contribute:` prefix in autocomplete.
+
+### Path B — Clone locally (for development or forking)
+
+```bash
+# 1. Clone the repo anywhere on your machine
+git clone https://github.com/shiminshen/oss-contribute.git
+cd oss-contribute
+
+# 2. In Claude Code, add the local clone as a marketplace
+#    (use the absolute path)
+/plugin marketplace add /absolute/path/to/oss-contribute
+/plugin install oss-contribute@oss-contribute
+```
+
+Use this path if you want to edit the skills, run `git pull` to track upstream changes, or fork-and-contribute. No `npm install` or build step — the plugin is plain markdown.
+
+### Verify the install
+
+After either path:
+
+```
+/oss-contribute:profile
+```
+
+Expected output: `No profile found. … Run: /oss-contribute:profile edit to set one up.` That message means the skills loaded correctly.
+
+### First-run setup
 
 ```
 /oss-contribute:profile edit
 ```
+
+Walks you through:
+
+- Which GitHub repos to watch (e.g. `better-auth/better-auth`, `vercel/next.js`)
+- Languages and stack you work in
+- Which `gh`-logged-in account to fork/PR from (asks every time when multiple are present, but seeds a sensible default)
+- Default time budget (`30m` / `1h` / `weekend`)
+- What "ripe" means to you (heuristic seed for `find-issues` ranking)
+
+Profile is written to `$CLAUDE_PLUGIN_DATA/profile.md` (survives plugin updates) when installed as a plugin, or `~/.claude/skills/oss-contribute/profile.md` in local-dev mode.
+
+### Update later
+
+```
+/plugin update oss-contribute
+```
+
+Or, for the cloned path: `git pull` in the repo, then `/plugin reload oss-contribute` (or uninstall + install).
 
 ## The reactive flow (killer feature)
 
