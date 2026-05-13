@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
 
+## [0.4.1] — 2026-05-14
+
+### Changed — compress duplicated passages in `find-issues`
+
+Each duplicated procedure now has one authoritative home (in `contribute-upstream`) and `find-issues` defers to it with a short pointer. Saves ~15 lines, no behavior change.
+
+- **Scope/intent ambiguity drop criterion** — full criteria + the `drizzle-orm#5755` documented case live in `contribute-upstream` Phase 3 step 4. `find-issues` Phase 3 keeps a one-line drop criterion + pointer.
+- **Invitation-only upstream drop criterion** — full check + the `openai/codex` documented case live in `contribute-upstream` Phase 1 step 2. `find-issues` Phase 3 keeps a one-line drop criterion + pointer.
+- **Phase 4 pre-output freshness re-check** — now refers to "the Phase 3 duplicate-PR search" instead of re-listing the token types. The procedure stays in Phase 3 as the single source of truth.
+
 ## [0.4.0] — 2026-05-13
 
 ### Performance — search speedups

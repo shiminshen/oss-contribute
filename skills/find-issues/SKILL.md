@@ -107,8 +107,8 @@ Drop the candidate if **any** of these is true:
 - The most recent maintainer comment says "we're working on this" / "PR incoming".
 - It's labelled `needs: info`, `wontfix`, `discussion`, `rfc`, or similar non-actionable.
 - It's older than 6 months with no activity.
-- **Scope/intent ambiguity.** If the issue body says "X is missing" or "X doesn't work in version Y" against a `vN.0.0-beta/rc.M` of a package mid-rewrite, briefly check (via `gh api repos/.../contents/...` + grep) whether X exists in the new code paths. If X is **wholly absent** (not just typed-out), the "fix" is a re-implementation, not a bug fix — maintainer intent is required. Demote to issue-comment-only path, not drive-by PR. Documented failure case: `drizzle-team/drizzle-orm#5755` filed against `drizzle-kit@1.0.0-rc.2` reported "casing missing from Config type"; on the `beta` branch `casing` is absent from both type and runtime, so the v1 rewrite intentionally or accidentally dropped the feature — adding the type field alone would ship a misleading API.
-- **Invitation-only upstream.** If the upstream's `docs/contributing.md`, `CONTRIBUTING.md`, or `.github/pull_request_template.md` contains phrases like "invitation only", "do not accept unsolicited", "closed without review", drop the candidate. Documented failure case: `openai/codex` accepts external PRs by invitation only — uninvited PRs are closed unread.
+- **Scope/intent ambiguity** (feature gone, not bug). For issues filed against a `vN.0.0-beta/rc.M` of a package mid-rewrite, briefly check whether the missing thing exists in the new code paths. If wholly absent, demote to issue-comment-only. Full criteria + documented case (`drizzle-orm#5755`) in `contribute-upstream` Phase 3 step 4.
+- **Invitation-only upstream.** Drop if the upstream's contributing doc or PR template contains "invitation only" / "do not accept unsolicited" / "closed without review". Full check + documented case (`openai/codex`) in `contribute-upstream` Phase 1 step 2.
 
 ### Duplicate-PR search
 
@@ -161,13 +161,7 @@ Cache the per-repo signals for the duration of one `find-issues` invocation (don
 
 ## Phase 4 — Output
 
-**Pre-output freshness re-check (BLOCKING).** The parallel scouts in Phase 2/3 may have run minutes ago. On Hot repos, an exact-fix PR can land in that window — and your shortlist will be stale. Before emitting the ranked list, run a final batched verification pass: for each top-5 candidate, in ONE message run:
-
-- `gh search prs --repo <owner>/<repo> --state open --limit 5 "#<n>"`
-- One or two distinctive backticked identifiers from the issue body
-- `gh issue view <n> --json closedByPullRequestsReferences,assignees,state`
-
-This is cheap (~15 parallel calls) and catches the scout-to-handoff gap. Drop any candidate where a new PR has appeared. Documented failure: 2026-05-13 hunt — `mastra-ai/mastra#16514` passed the scout's dup-PR check; PR #16545 ("fix(durable): handle object form of instructions in preparation.ts") opened ~10 minutes later. Caught only when the user explicitly asked "did you check no existing PR?"
+**Pre-output freshness re-check (BLOCKING).** Scout subagents may have run minutes ago and a PR can land in that window — your shortlist goes stale. Before emitting the ranked list, re-run the Phase 3 duplicate-PR search against the top-5 candidates in a single batched message, plus `gh issue view <n> --json closedByPullRequestsReferences,assignees,state`. Drop any candidate where a new PR has appeared. Documented failure: 2026-05-13 hunt — `mastra-ai/mastra#16514` passed the scout's dup-PR check; PR #16545 opened ~10 minutes later. Caught only when the user explicitly asked "did you check no existing PR?"
 
 Show the top 5 as a compact ranked list:
 
