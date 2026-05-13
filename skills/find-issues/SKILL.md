@@ -44,33 +44,55 @@ The profile covers:
 
 ## Phase 2 — Discover candidates
 
-**Strongly prefer dispatching one `general-purpose` subagent per repo**, running them in a single message for true parallelism. Each subagent: fetches recent open issues (last 7d, sorted by created), filters to bugs with 0–1 comments, runs the token-based dup-PR search from Phase 3 against each, and returns a compact list (≤5 candidates × ≤3 lines each) with verdict. Aggregate in the main agent. This keeps raw `gh search issues` JSON out of the main context window, which matters because the JSON is verbose and the main agent only needs the curated list.
+**Dispatch one `general-purpose` subagent per repo in a single message.** Not one-at-a-time — one message containing N parallel `Agent` tool calls, where N = number of watched repos. The instructions read sequentially but the calls must be batched; otherwise the model often serialises them.
+
+Each subagent: fetches recent open issues (last 7d, sorted by created), filters to bugs with 0–1 comments, runs the token-based dup-PR search from Phase 3 against each, and returns a compact list (≤5 candidates × ≤3 lines each) with verdict. Aggregate in the main agent. This keeps raw `gh search issues` JSON out of the main context window.
 
 Per-repo subagent prompt skeleton:
 - Repo: `<owner>/<repo>`
 - Profile stack: `<langs/frameworks from profile>` (only for relevance scoring; do not filter by GFI/HW labels — see profile rule)
 - Return: top 5 ripe candidates (no dup PRs by token search, no assignees, ≤1 comment, opened in last 7d), one line each with `repo#N — title — why-ripe`. If 0 ripe, say "0 ripe in this repo".
 
-Fallback (skip subagents): run for each repo in the (filtered) watched list, in parallel:
+### Single-query label search (use this, not N separate `--label` calls)
+
+`gh search issues --label` is AND, not OR. **Do not** run one call per label and merge — that's 3× the API round-trips. Use `--query` with an OR expression so the labels collapse into a single search:
 
 ```
-gh search issues \
-  --repo <owner>/<repo> \
-  --state open \
-  --label "good first issue" \
-  --label "help wanted" \
-  --label "bug" \
-  --sort updated \
+gh search issues --json number,title,labels,assignees,createdAt,updatedAt,url \
+  --query 'repo:<owner>/<repo> state:open (label:"good first issue" OR label:"help wanted" OR label:"bug") sort:updated-desc' \
   --limit 30
 ```
-
-`gh search issues --label` is AND, not OR — run one query per relevant label and combine result sets in the skill. Apply args filters (language, repo, budget) and profile filters.
 
 Cap the total candidate pool at ~60 across all repos before triage, to keep Phase 3 cheap.
 
 ## Phase 3 — Triage each candidate
 
-For every survivor, fetch:
+### Batch-fetch enrichment via GraphQL (use this, not N separate `gh issue view` calls)
+
+`gh issue view --json` is one round-trip per candidate. For 30 candidates that's 30 round-trips. **Use one GraphQL call instead:**
+
+```
+gh api graphql -F owner=<owner> -F repo=<name> \
+  -F numbers='[<n1>,<n2>,...]' -f query='
+  query($owner:String!,$repo:String!,$numbers:[Int!]!){
+    repository(owner:$owner,name:$repo){
+      issues:nodes:issues(first:50){nodes{
+        number title body createdAt updatedAt
+        assignees(first:5){nodes{login}}
+        labels(first:20){nodes{name}}
+        comments(last:3){nodes{author{login} body createdAt}}
+        closedByPullRequestsReferences(first:5){nodes{number state}}
+        timelineItems(last:10,itemTypes:[CROSS_REFERENCED_EVENT,ASSIGNED_EVENT]){
+          nodes{__typename ... on CrossReferencedEvent{source{__typename ... on PullRequest{number state}}}}
+        }
+      }}
+    }
+  }'
+```
+
+(Alias each candidate via `node(id:...)` if GitHub's bulk-by-number is unavailable in your CLI version — the point is **one round-trip, not N**.)
+
+**Fallback** if GraphQL is unavailable: dispatch the per-issue `gh issue view --json` calls **in a single message**, one Bash tool call per candidate, batched in parallel. Not sequentially.
 
 ```
 gh issue view <n> --repo <owner>/<repo> --json \
@@ -92,24 +114,50 @@ Drop the candidate if **any** of these is true:
 
 Issue-title keywords miss PRs whose title describes the *implementation* rather than the *symptom*. Search by tokens extracted from the issue body, not by paraphrases of the title.
 
-For each candidate, run `gh search prs --repo <owner>/<repo> --state open <token>` against each of these, in order, and stop at the first hit:
+**Dispatch all token queries in parallel.** Send ONE message containing one Bash tool call per token type — not 4–5 sequential calls. Inspect all results together and short-circuit if any returns a PR hit.
+
+The four token types per candidate:
 
 1. **The issue number itself.** `"#93700"` and bare `"93700"` — many PR descriptions reference it.
 2. **URL-encoded or other distinctive literals** in the issue body — `%5F`, error codes, magic strings.
 3. **Backticked code identifiers** from the issue body — function names, file paths, type names (e.g. `` `LayoutRoutes` ``, `` `buildUpdateSet` ``).
 4. **Error message fragments** quoted in the body, if any.
 
+Each query: `gh search prs --repo <owner>/<repo> --state open --limit 5 <token>`.
+
 A title-keyword search alone is not enough. Documented failure case: issue titled "Layouts for paths that start with underscore (%5F)…" had an open PR titled "fix(typegen): normalize %5F to _…" — caught only by the `%5F` token search.
 
-If a PR hit appears, drop the candidate.
+If any PR query hits, drop the candidate.
 
 For each survivor, score on:
 
 - **Repro quality** — does the body have steps + expected vs actual?
 - **Scope estimate** — `one-liner` / `small` / `medium` / `large`. Drop `large` from a "weekend"-budget shortlist.
 - **Stack match** — overlap with the user's languages/frameworks.
-- **Repo health** — recent merge cadence, last release date.
+- **Repo activity (merge-likelihood)** — see below. Boost candidates from repos that actively merge PRs.
 - **Maintainer signal** — has a maintainer triaged/labelled it?
+
+### Repo activity scoring (merge-likelihood)
+
+Issues in repos that don't merge anything are dead ends. Issues in repos that merge weekly are bets worth making. Fetch repo-level signals **once per watched repo**, in parallel with Phase 2's issue search — not per-candidate.
+
+For each watched repo, one extra parallel call:
+
+```
+gh api repos/<owner>/<repo> --jq '{pushedAt, stargazersCount, openIssues:open_issues_count}'
+gh search prs --repo <owner>/<repo> --state merged --merged ">=$(date -v-30d +%Y-%m-%d)" --limit 1 --json url
+```
+
+Combine into a per-repo activity tier:
+
+- **Hot** — ≥1 PR merged in last 7 days AND `pushedAt` within last 14 days. **Strong boost.**
+- **Active** — ≥1 PR merged in last 30 days. Normal weight.
+- **Slow** — 0 PRs merged in last 30 days but the repo isn't archived. Demote one tier in the final ranking.
+- **Dormant** — no merges in 30 days AND no commits to default branch in 60 days. Drop entirely; surface to user with "0 ripe (repo dormant)" so they can prune the watchlist.
+
+Stars are a weak popularity signal — use only as a tiebreaker between two same-tier candidates, never as a primary score. A 1k-star repo with 5 merged PRs/week beats a 50k-star repo that merges nothing.
+
+Cache the per-repo signals for the duration of one `find-issues` invocation (don't re-fetch across the Phase 2 ↔ Phase 3 boundary).
 
 ## Phase 4 — Output
 

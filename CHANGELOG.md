@@ -14,6 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
 
+## [0.4.0] — 2026-05-13
+
+### Performance — search speedups
+
+The bottleneck users feel during `find-issues` and `contribute-upstream` Phase 1 is the search step: many sequential `gh` round-trips. This release cuts API round-trips and replaces sequential dispatch with explicit-parallel dispatch.
+
+- **Single OR-query for labels** (both skills). `gh search issues --label` is AND, not OR — running three separate searches for `good first issue` / `help wanted` / `bug` is 3× the round-trips. Replaced with one `--query 'repo:... state:open (label:"good first issue" OR label:"help wanted" OR label:"bug")'` call.
+- **GraphQL batch enrichment in `find-issues` Phase 3.** Replace N `gh issue view --json` round-trips with a single `gh api graphql` call that returns assignees + labels + comments + `closedByPullRequestsReferences` for all candidates at once. ~30× round-trip reduction at typical pool sizes. Fallback to batched-parallel `gh issue view` if GraphQL is unavailable.
+- **True-parallel Bash dispatch — explicit instructions in both skills.** Previous text said "in parallel" but the model often serialised calls because instructions read sequentially. Now: "Send ONE message containing one Bash tool call per repo/token. Do not run them sequentially." Applies to per-repo discovery in `find-issues` Phase 2 and the 4 token queries in both skills' duplicate-PR searches.
+
+### Added — `find-issues` Phase 3 repo-activity scoring
+
+Issues in repos that don't merge anything are dead ends; issues in repos that merge weekly are bets worth making. Per watched repo, fetch one extra parallel signal (recent merge count via `gh search prs --state merged --merged ">=30d"`) and classify into:
+
+- **Hot** — ≥1 merge in last 7d + recent push: strong boost
+- **Active** — ≥1 merge in last 30d: normal weight
+- **Slow** — 0 merges in 30d: demote one tier
+- **Dormant** — no merges + no default-branch commits in 60d: drop, surface to user so they can prune the watchlist
+
+Stars are tiebreaker only — never a primary score.
+
 ## [0.3.0] — 2026-05-13
 
 ### Added — features ported from competitor scans

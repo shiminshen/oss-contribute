@@ -1,6 +1,6 @@
 {
   "name": "oss-contribute",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Turn the bugs you hit in third-party dependencies into upstream contribution PRs — without leaving your project. Three skills covering the OSS-contribution-as-career-ops loop: find ripe issues, ship the fix, and a shared profile so preferences never drift.",
   "author": {
     "name": "shiminshen",

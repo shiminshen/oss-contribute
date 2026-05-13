@@ -45,13 +45,18 @@ Do all of the following before touching any code. If any step surfaces a blocker
    **Invitation-only / closed-contribution check (HARD STOP).** Some projects (e.g. `openai/codex`) accept external PRs **by invitation only** and close uninvited PRs unread. Scan the contributing doc and PR template for phrases like "invitation only", "do not accept unsolicited", "closed without review", "external contributions are closed". If found, STOP — do not proceed to Phase 2 clone. Instead, switch to Phase 6 (issue-only path) and offer to comment on the issue with analysis + suggested fix, which is what these projects explicitly invite. Surface this clearly to the user before any further work.
 3. **Check signs of life.** Recent merged PRs (last 30d), issue response cadence, last release. If the project looks dormant or hostile to outside PRs, surface that and ask whether to continue.
 4. **Check whether discussion is required.** Some projects explicitly require an issue before a feature PR and will close cold feature PRs. Bug fixes are usually fine. For features, file or find the issue first.
-5. **Duplicate search.** Title-keyword searches miss PRs whose title describes the *implementation* rather than the *symptom*. Search by tokens extracted from the issue body, in this order; stop at the first PR hit:
+5. **Duplicate search.** Title-keyword searches miss PRs whose title describes the *implementation* rather than the *symptom*. Search by tokens extracted from the issue body.
 
-   1. **The issue number itself.** `gh search prs --repo <owner>/<repo> "<n>"` — many PR descriptions reference the issue.
+   **Dispatch all four token queries in parallel — ONE message with one Bash tool call per token type.** Do not run them sequentially. Inspect results together; if any returns a PR hit, short-circuit and drop.
+
+   The token types:
+
+   1. **The issue number itself.** `gh search prs --repo <owner>/<repo> --state open --limit 5 "<n>"` — many PR descriptions reference the issue.
    2. **URL-encoded or other distinctive literals** in the issue body — `%5F`, error codes, magic strings.
    3. **Backticked code identifiers** from the issue body — function names, file paths, type names.
    4. **Error message fragments** quoted in the body, if any.
-   5. Title-keyword paraphrases as a last resort, not a first resort.
+
+   Title-keyword paraphrases are a last resort, not a first resort.
 
    Documented failure case: issue titled "Layouts for paths that start with underscore (%5F)…" had an open PR titled "fix(typegen): normalize %5F to _…" — caught only by the `%5F` literal-token search, not by title-keyword variants.
 
