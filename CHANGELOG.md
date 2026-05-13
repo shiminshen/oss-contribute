@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `pipeline` skill — status of your open/merged PRs across forks
 - `log` skill — generate a portfolio entry from merged contributions
+- `do` / `guide` / `adaptive` operating modes (per-session, persisted)
+- Per-repo conventions cache to speed up repeat contributions
+
+## [0.3.0] — 2026-05-13
+
+### Added — features ported from competitor scans
+
+- **`contribute-upstream` Phase 6b — Propose action.** When an upstream issue exists but the fix is too large or design-sensitive for one session, post a structured proposal comment (problem restatement, root-cause analysis, design sketch, open questions, what-I'd-need-to-ship-it) on the existing issue. Pattern adapted from `mainnebula/token-steward`'s Fix/Review/Propose action types. Fills the gap between "open issue" and "open PR" — gauges maintainer interest before anyone writes code.
+- **`contribute-upstream` Phase 8 — Respond to PR review.** Round-trip handling between PR open and merge: fetch review state, classify each feedback item (apply / push back / clarify / out-of-scope), summarise the plan to the user, apply only after confirmation, reply on every thread, never silently re-push. Pattern adapted from `LuciferDono/contribute`'s PR-review phase, with stricter no-force-push / no-rebase-mid-review rules.
+
+### Changed — hardened OSS-contribution norms
+
+- **No AI-attribution trailers on commits.** Explicit hard rule banning `Co-Authored-By: Claude`, `Generated-By`, or any "AI assisted" marker on commits, in commit-message bodies, or in PR bodies. OSS maintainers treat these as noise. Identity comes from `gh api user --jq '.login'` and `git config user.name` / `user.email`. Pattern adapted from `LuciferDono/contribute` Rule 2.
 
 ## [0.2.0] — 2026-05-13
 

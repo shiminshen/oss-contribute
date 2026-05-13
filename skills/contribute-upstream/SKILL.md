@@ -118,14 +118,36 @@ Confirm the new test fails for the **right** reason before writing a fix.
    Ask for explicit confirmation. Do not open the PR until the user says yes. If they ask for edits, revise and re-show — never push or open the PR on your own initiative.
 8. **Push from fork, open PR cross-repo** only after step 7 confirmation: `gh pr create --repo upstream/repo --head user:branch`.
 
-## Phase 6 — Issue-only escape hatch
+## Phase 6 — Issue-only or Propose escape hatch
 
-If Phase 3 can't produce a minimal upstream repro, switch to filing an issue:
+When Phase 3 (repro bridge) or the Phase 3 tractability gate blocks the PR path, **do not** abandon the contribution — switch to the most useful artifact you can still produce. Pick one of two outputs:
+
+### 6a — File a new issue
+
+Use when no upstream issue exists yet (you discovered the bug from your consumer-side symptom).
 
 - Use the project's bug-report template.
 - Include: installed version, exact symptom, minimal consumer-side repro, expected vs actual, environment.
 - Link related closed issues/PRs found in Phase 1.
 - Do **not** open a PR in this path.
+
+### 6b — Post a Proposal comment
+
+Use when an upstream issue already exists but the fix is too large, too design-sensitive, or otherwise not session-sized. Maps to what Token-Steward calls the "Propose" action: a structured comment that gauges maintainer interest before anyone writes code.
+
+Structure the comment as:
+
+1. **Problem restated in one line** — confirms you understood the report.
+2. **Root-cause analysis** — what's broken in the codebase, with file:line references where useful.
+3. **Proposed approach** — the design sketch, not the diff. 3–6 bullets max.
+4. **Open questions for the maintainer** — explicit asks: "Is this the right surface to fix?", "Should this be a breaking change?", "Is there a related refactor in flight?"
+5. **What I'd need to ship it** — assignment, API blessing, test-strategy guidance.
+
+**Hard rules for proposal comments:**
+
+- The comment is read-only output to the user first; do not post until the user confirms.
+- Use the issue's existing thread; do not open a duplicate issue.
+- Do **not** include the diff. Description sketches, not implementations — let the maintainer steer before code is written.
 
 ## Phase 7 — Local patch handoff (consumer side)
 
@@ -137,18 +159,45 @@ The upstream PR may sit in review for days or weeks. Don't leave the consumer bl
 
 Leave a TODO in the consumer repo noting the upstream PR number so the patch can be removed once the fix is released.
 
+## Phase 8 — Respond to PR review
+
+After the PR is open, maintainers will (eventually) review and almost always request changes. This phase handles the round-trip until merge or close.
+
+Trigger this phase when `gh pr view <n> --json reviews,comments,reviewRequests` shows new activity since the last check, or the user invokes `/oss-contribute:contribute-upstream` with the PR URL/number after it's open.
+
+1. **Fetch the review state.** `gh pr view <n> --repo <upstream> --json reviews,comments,reviewDecision,latestReviews,statusCheckRollup`. Identify which reviewer requested what, and the disposition (`CHANGES_REQUESTED`, `COMMENTED`, `APPROVED`).
+2. **Classify each feedback item.** Bucket every comment / review thread into one of:
+   - **Apply as-is** — clear, scoped, no design implications.
+   - **Push back politely** — the reviewer is wrong or misread; reply with the counter-argument, do not change code.
+   - **Clarify before changing** — the ask is ambiguous; reply asking a specific question, do not change code yet.
+   - **Out of scope for this PR** — file as a follow-up issue, link from the comment, do not bloat the PR.
+3. **Summarise the bucketed plan to the user** before touching code. ≤10 lines. Get explicit go-ahead.
+4. **Apply approved changes.** Smallest possible diff per feedback item. Run the project's tests + typecheck after each round.
+5. **Push the update.** `git push origin <branch>` to the fork — never to upstream. The PR auto-updates.
+6. **Reply to each feedback thread.** For applied items: short ack ("Done in <sha>.") with a permalink. For pushed-back items: the counter-argument. For clarifying questions: the question.
+7. **Re-request review** if the project's convention is to do so explicitly (`gh pr ready` or a comment ping). Match what recent merged PRs in the repo do — don't invent a convention.
+
+### Hard rules for Phase 8
+
+- **No silent re-pushing.** Every push must be paired with a reply on the review thread explaining what changed.
+- **Don't rebase the PR branch onto upstream main mid-review** unless the maintainer asks. Adds churn and may invalidate prior reviews.
+- **Don't force-push** unless the maintainer asks. Use additive commits; let them squash on merge.
+- **Stop and escalate** if the reviewer asks for something that would break Phase 1 hard rules (e.g. AI-attribution trailer, force-push to main, bypass CLA). Surface the conflict to the user; do not silently comply.
+
 ## Hard rules
 
 - **Never** push to the upstream's main repo. Always work from the user's fork.
 - **Never** commit without explicit user instruction.
 - **Never** amend or force-push a published commit unless the user explicitly asks.
 - **Never** open a PR for a new feature or breaking change without an existing or freshly-filed issue, if the project's CONTRIBUTING requires one.
+- **No AI-attribution trailers on commits.** Never add `Co-Authored-By: Claude` / `Generated-By` / any "AI assisted this commit" line. OSS maintainers treat these as noise at best, hostile at worst — the contribution must read as sole-authored by the GitHub user. Determine identity via `gh api user --jq '.login'` and `git config user.name` / `git config user.email`. Zero exceptions, including in commit-message bodies and PR bodies.
 - **Surface, don't suppress.** If any phase reveals the contribution probably won't be accepted (dormant repo, scope mismatch, CLA blocker, duplicate open PR, scope-creep risk), say so before doing the work.
 
 ## Output shape
 
 At the end, produce:
 
-- The upstream PR URL (or upstream issue URL, if Phase 6).
+- The upstream PR URL (Phase 5), issue URL (Phase 6a), or proposal-comment permalink (Phase 6b).
 - The consumer-side patch/override instructions actually applied (if Phase 7).
+- The post-review state if Phase 8 ran: open feedback threads remaining, last push SHA, current `reviewDecision`.
 - A one-line tracker note: package, version, PR/issue #, what to remove once released.
