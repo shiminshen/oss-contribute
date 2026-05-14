@@ -14,6 +14,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
 
+## [0.6.0] — 2026-05-14
+
+### Changed — `contribute-upstream` reference-file refactor
+
+`contribute-upstream`'s on-invoke token cost was ~9.4k — the largest skill in the everything-claude-code 89-skill plugin tops out at ~3.9k. The bulk came from three categories of content that don't all need to be loaded every invocation: the full Phase 8 review-response procedure (only relevant when a PR is open), the seven-dimension convention checklist (used in two phases), and the ~8 documented failure-case narratives (each tied to one specific gate).
+
+Extracted those into `skills/contribute-upstream/references/`:
+
+- `references/convention-checklist.md` — single source for the Phase 3 step 0 pre-coding scan + Phase 4 audit. Phase 3 and Phase 4 in SKILL.md now load this on demand.
+- `references/phase-8-review.md` — full 7-step procedure + Phase 8 hard rules. Phase 8 in SKILL.md collapses to trigger condition + load instruction.
+- `references/case-studies.md` — eight documented failure cases consolidated (`mastra#16422` late assignee, `vercel/ai#13962` dead-area, `assistant-ui#4009` / `mastra#16383` / `drizzle-orm#5755` already-fixed-on-main, `openai/codex` invitation-only, `%5F` literal-token search, `drizzle-orm#5755` feature-gone, `CopilotKit#4798` convention divergence, `mastra#16514` late dup-PR). Each gate inline in SKILL.md keeps a one-line motivating-case pointer.
+
+Result: contribute-upstream on-invoke dropped from **~9.4k → ~7.2k** (~24%). Still above the popular-plugin median but now in the ballpark of the largest comparable skills (springboot-patterns at 3.9k). Behaviour unchanged.
+
+The procedural gates (BLOCKING criteria, drop conditions, cheap-check commands) stay inline so the model doesn't need a reference fetch to know *what to check*. The narrative *why* — the motivating case story — moves to references/ where it loads only when the model wants to recognise a similar shape.
+
 ## [0.5.0] — 2026-05-14
 
 ### Added — `contribute-upstream` Phase 3 step 0: Convention scan (BLOCKING before any code)

@@ -43,20 +43,21 @@ Do all of the following before touching any code. If any step surfaces a blocker
    - A token-search PR hits the same fix surface
    - Issue state is no longer `OPEN`
 
-   Documented case: 2026-05-14, `mastra-ai/mastra#16422` — chosen from a fresh `find-issues` shortlist, scout's dup-PR check showed `assignees: []`. ~30 minutes later (after rules-of-the-road scout + clone + reading source + writing the fix + writing tests + commit), the freshness re-check just before push surfaced that `@intojhanurag` had been assigned in the interim. Half-day of work avoided being submitted as a competing PR. Moving the gate to Phase 1 step 0 would have caught it before any clone or code-writing.
+   Motivating case: `mastra-ai/mastra#16422` (late assignee). See `references/case-studies.md#freshness--late-assignee-phase-1-step-0`.
 
-0a. **Adjacent-stalled-PR check (BLOCKING).** Even if the issue passes the freshness check, search for any open PR in the *same code area* that has been stalled for weeks. If maintainers haven't reviewed a sibling PR in 30+ days, your PR will likely sit too. Run a quick `gh pr view <stalled-pr-number> --json reviews,comments,reviewDecision` — zero reviews + zero comments + REVIEW_REQUIRED for 30+ days is the "dead area" signal. Surface to the user before investing.
+0a. **Adjacent-stalled-PR check (BLOCKING).** Search for any open PR in the *same code area* that has been stalled. Run `gh pr view <stalled-pr-number> --json reviews,comments,reviewDecision` — **zero reviews + zero comments + `REVIEW_REQUIRED` for 30+ days** is the "dead area" signal. Surface to the user before investing.
 
-   Documented case: 2026-05-14, `vercel/ai#13962` passed freshness but the adjacent PR #12924 ("pass abort signal to reconnectToStream so `stop()` works on resumed streams") — same `Chat.stop()` code area — had been open since 2026-02-27 with zero reviews, zero comments, REVIEW_REQUIRED. ~75 days of total maintainer silence in that area. A fresh PR for #13962 would face the same fate.
+   Motivating case: `vercel/ai#13962` adjacent to stalled `#12924`. See `references/case-studies.md#adjacent-stalled-pr--dead-area-signal-phase-1-step-0a`.
 
-0b. **Already-fixed-on-main check (BLOCKING).** Read the version the reporter is on from the issue body. Compare to current `main`'s version + recent commits to the file path the reporter mentions. If a fix-shaped commit landed *between the reporter's version and main*, the bug may already be fixed; the reporter just needs to upgrade. Verify by running the existing tests for that file (if they assert the behavior the reporter claims is broken). If they pass on main, drop the candidate and offer to comment on the issue pointing them to the version that fixes it.
+0b. **Already-fixed-on-main check (BLOCKING).** Read the version the reporter is on from the issue body. Compare to current `main`'s version + recent commits to the file path the reporter mentions. If a fix-shaped commit landed *between the reporter's version and main*, the bug may already be fixed — the reporter just needs to upgrade. Verify by running the existing tests for that file. If they pass on main, drop and offer to comment pointing the reporter to the version that fixes it.
 
-   Three documented cases on 2026-05-14:
-   - `assistant-ui#4009` — reporter on v0.14.0; dosu bot's own follow-up comment said "this has been addressed in recent PRs merged to main: PR #3927 (May 5), PR #3954" — but the issue stayed open because the merged PRs didn't formally close it.
-   - `mastra#16383` — reporter on `@mastra/schema-compat@1.1.3`; current main is 1.2.10 with PR #14624 (2026-04-13) landing "fix(schema-compat): improve provider structured output and tool-call compatibility" 4 weeks before the issue was filed. Existing strict-mode tests in `openai.test.ts` (792/792 green) explicitly assert `.optional()` → strict-mode compliant schema.
-   - `drizzle-orm#5755` — reporter on `drizzle-kit@1.0.0-rc.2` (mid-rewrite beta); the named `casing` config feature was wholly absent in the new code paths — but the inverse shape: NOT already fixed, it was intentionally / accidentally dropped. Same family of "filed against the wrong slice of the version axis."
+   Cheap check:
+   ```
+   gh api 'repos/<owner>/<repo>/commits?path=<file>&per_page=15' \
+     --jq '.[] | {sha: .sha[:8], date: .commit.author.date, msg: .commit.message | split("\n")[0]}'
+   ```
 
-   Cheap check: `gh api 'repos/<owner>/<repo>/commits?path=<file>&per_page=15' --jq '.[] | {sha: .sha[:8], date: .commit.author.date, msg: .commit.message | split("\n")[0]}'` against the file the reporter references, then look for a fix-shaped commit between the reporter's version-release date and now.
+   Motivating cases: `assistant-ui#4009`, `mastra#16383`, and the inverse `drizzle-orm#5755`. See `references/case-studies.md#already-fixed-on-main--wrong-slice-of-the-version-axis-phase-1-step-0b`.
 
 1. **Resolve the upstream repo.** From the consumer's `package.json` + lockfile, get the installed version and the `repository` URL. Disambiguate (workspace, fork, mirror) with the user if needed.
 2. **Read the rules of the road.** **Strongly prefer dispatching this to a `general-purpose` subagent** — many file fetches, mostly null results, content dumps that pollute the main context. The subagent returns a compact verdict (≤15 lines) covering: contribution policy (open / discuss-first / invitation-only — HARD STOP if invitation-only), signed-commits requirement, CLA, branch target, changeset usage, packageManager + node version. Pass the upstream `owner/repo` and the issue number for context.
@@ -84,9 +85,7 @@ Do all of the following before touching any code. If any step surfaces a blocker
    3. **Backticked code identifiers** from the issue body — function names, file paths, type names.
    4. **Error message fragments** quoted in the body, if any.
 
-   Title-keyword paraphrases are a last resort, not a first resort.
-
-   Documented failure case: issue titled "Layouts for paths that start with underscore (%5F)…" had an open PR titled "fix(typegen): normalize %5F to _…" — caught only by the `%5F` literal-token search, not by title-keyword variants.
+   Title-keyword paraphrases are a last resort, not a first resort. Motivating case: the `%5F` literal-token search. See `references/case-studies.md#token-based-duplicate-pr-search--implementation-titled-prs-phase-1-step-5`.
 
    Also run `gh issue view <n> --json assignees,closedByPullRequestsReferences,comments` on every candidate issue. Outcomes:
    - Open issue, no assignee, no linked PR → add the user's extra context as a comment; ask in the same comment whether you can take it (some projects require an explicit "assign me" / `/assign` before you start).
@@ -112,24 +111,13 @@ Do all of the following before touching any code. If any step surfaces a blocker
 
 This is the hardest step. In order:
 
-0. **Convention scan (BLOCKING before any code, including the failing test).** Before writing a single line — even the failing test — read the surrounding code with this checklist. Your output must match what the maintainers already chose, not just compile and pass:
-   - **Test file structure.** Open the closest existing test file end-to-end. Note its `describe` / `it` shape, setup placement (`beforeEach` vs inline), assertion style (`expect(...)` chains used vs custom helpers), and how it organises arrange/act/assert.
-   - **Helpers and mock factories.** Do existing helpers return raw state (Maps, arrays) or only controller functions (`emitX`, `setY`)? Are there top-level mock factories you should reuse? Match the existing style; don't invent a parallel helper.
-   - **Naming.** What verb forms does the file use — `getX` / `createX` / `emitX`? What top-level named types does it declare for casts (e.g. `InspectorInternals`) vs ad-hoc inline `as` casts? Match the dominant pattern.
-   - **Cross-cutting setup.** Global stubs (fetch, timers, env) — are they in a top-level `beforeEach` alongside other setup, or inline per test? Match it.
-   - **Comment density and tone.** Does the file explain WHY each test exists with a multi-line preamble, or one-liners? Match it.
-   - **Lifecycle / async patterns.** Is there a standard "after every state change, `await component.updateComplete`" (or equivalent) idiom? Apply it without being asked.
-   - **Import style.** Relative vs alias paths? Type-only imports? Group ordering? Match it.
-
-   Read recent merged PRs touching adjacent files (`gh pr list --search "<file/path>" --state merged --limit 3`) — they show what conventions the maintainers *enforce in review*, which may differ from what's left in older files. When in doubt, match the most recent merged style.
-
-   This step is the **prevention** counterpart to Phase 4's post-write Convention audit. Doing it first means the audit confirms; skipping it means the audit catches mistakes after they're written — and produces review churn.
+0. **Convention scan (BLOCKING before any code, including the failing test).** Before writing a single line — even the failing test — load `references/convention-checklist.md` and run it against the file you'll modify and its closest test file. Capture the test-file structure, helper / mock-factory patterns, naming conventions, cross-cutting setup placement, comment density, lifecycle / async idioms, and import style. Also read recent merged PRs touching adjacent files (`gh pr list --search "<file/path>" --state merged --limit 3`) — they show what conventions the maintainers *enforce in review*. Prevention counterpart to Phase 4's audit; skipping it means the audit catches mistakes after they're written and produces review churn.
 
 1. **Adapt the upstream's existing tests.** Find the test file closest to the affected code and add a failing case that mirrors the consumer-side symptom — using the conventions captured in step 0.
 2. **Use the project's test harness** — do not invent a custom setup.
 3. **Bail out** if the bug depends on consumer-stack specifics the upstream can't reproduce (specific framework version, DB driver, env-specific behaviour). Switch to Phase 6 (issue-only).
 4. **Tractability gate (BLOCKING).** Before writing the fix, ask: *is the fix scope what the issue framing suggested?* Two failure modes to catch:
-   - **Feature gone, not bug.** The issue says "X is missing/broken in version Y" but X is wholly absent from the new code paths (not just typed-out). The "fix" is a re-implementation, not a bug fix — maintainer intent is required. Switch to Phase 6 (issue-only) with analysis: "feature X is absent in v1 — was this intentional or an oversight?" Documented case: `drizzle-team/drizzle-orm#5755` framed as a missing type field, but the v1 rewrite removed the entire `casing` runtime pipeline. Adding the type alone would ship a misleading API.
+   - **Feature gone, not bug.** The issue says "X is missing/broken in version Y" but X is wholly absent from the new code paths. The "fix" would be a re-implementation, not a bug fix — switch to Phase 6 with analysis: "feature X is absent — intentional or oversight?" Motivating case: `drizzle-orm#5755`. See `references/case-studies.md#tractability-gate--feature-gone-not-bug-phase-3-step-4`.
    - **Half-fix risk.** The minimal fix (e.g. one type addition) makes TS stop erroring but leaves runtime semantics broken. Don't ship half-fixes — they hide the bug from users. Either fix both or switch to Phase 6.
 
 Confirm the new test fails for the **right** reason before writing a fix.
@@ -140,14 +128,7 @@ Confirm the new test fails for the **right** reason before writing a fix.
 - Run the targeted test → the full affected file → the project's `typecheck`.
 - If the fix touches a public API, update `docs/` per the project's docs convention.
 - Add a regression marker if the project uses one (e.g. `@see https://github.com/.../issues/<n>` block above the test).
-- **Convention audit (BLOCKING before commit).** Verify counterpart to Phase 3 step 0's pre-coding scan. Re-read your changes against the same checklist; the scan was prevention, this is verification. Catch what slipped through:
-  - **Cast types**: does the file declare top-level named types (e.g. `InspectorInternals`) with a helper function, or inline ad-hoc casts? Match it.
-  - **Mock factories**: do existing factories return raw state (Maps, arrays) or only controller functions (`emitX`, `setY`)? Match it.
-  - **Global stubs**: are they in `beforeEach` alongside others, or inline per test? Match it.
-  - **Helper naming**: does the file use `getX` / `createX` / `emitX` consistently? Match the verb form.
-  - **Comment density and tone**: does the file explain WHY each test exists with a multi-line preamble, or one-liners? Match it.
-  - **`await` patterns**: is there a standard "after every state change, `await component.updateComplete`" pattern? Apply it.
-  Documented failure: CopilotKit#4798 — first commit had three style divergences (ad-hoc inline cast, fetch stub repeated per test instead of `beforeEach`, raw Map exposed instead of factory controller functions). User pushed back, required a cleanup follow-up commit that produced review churn. The convention audit would have caught all three before commit.
+- **Convention audit (BLOCKING before commit).** Re-load `references/convention-checklist.md` and run it against your diff. Verification counterpart to Phase 3 step 0's prevention scan — catch what slipped through. Motivating case: CopilotKit#4798. See `references/case-studies.md#convention-divergence-at-commit-phase-3-step-0--phase-4-audit`.
 
 ## Phase 5 — PR prep
 
@@ -215,28 +196,11 @@ Leave a TODO in the consumer repo noting the upstream PR number so the patch can
 
 ## Phase 8 — Respond to PR review
 
-After the PR is open, maintainers will (eventually) review and almost always request changes. This phase handles the round-trip until merge or close.
+After the PR is open, this phase handles the round-trip until merge or close.
 
-Trigger this phase when `gh pr view <n> --json reviews,comments,reviewRequests` shows new activity since the last check, or the user invokes `/oss-contribute:contribute-upstream` with the PR URL/number after it's open.
+**Trigger** when `gh pr view <n> --json reviews,comments,reviewRequests` shows new activity since last check, or the user invokes `/oss-contribute:contribute-upstream` with the PR URL/number after it's open.
 
-1. **Fetch the review state.** `gh pr view <n> --repo <upstream> --json reviews,comments,reviewDecision,latestReviews,statusCheckRollup`. Identify which reviewer requested what, and the disposition (`CHANGES_REQUESTED`, `COMMENTED`, `APPROVED`).
-2. **Classify each feedback item.** Bucket every comment / review thread into one of:
-   - **Apply as-is** — clear, scoped, no design implications.
-   - **Push back politely** — the reviewer is wrong or misread; reply with the counter-argument, do not change code.
-   - **Clarify before changing** — the ask is ambiguous; reply asking a specific question, do not change code yet.
-   - **Out of scope for this PR** — file as a follow-up issue, link from the comment, do not bloat the PR.
-3. **Summarise the bucketed plan to the user** before touching code. ≤10 lines. Get explicit go-ahead.
-4. **Apply approved changes.** Smallest possible diff per feedback item. Run the project's tests + typecheck after each round.
-5. **Push the update.** `git push origin <branch>` to the fork — never to upstream. The PR auto-updates.
-6. **Reply to each feedback thread.** For applied items: short ack ("Done in <sha>.") with a permalink. For pushed-back items: the counter-argument. For clarifying questions: the question.
-7. **Re-request review** if the project's convention is to do so explicitly (`gh pr ready` or a comment ping). Match what recent merged PRs in the repo do — don't invent a convention.
-
-### Hard rules for Phase 8
-
-- **No silent re-pushing.** Every push must be paired with a reply on the review thread explaining what changed.
-- **Don't rebase the PR branch onto upstream main mid-review** unless the maintainer asks. Adds churn and may invalidate prior reviews.
-- **Don't force-push** unless the maintainer asks. Use additive commits; let them squash on merge.
-- **Stop and escalate** if the reviewer asks for something that would break Phase 1 hard rules (e.g. AI-attribution trailer, force-push to main, bypass CLA). Surface the conflict to the user; do not silently comply.
+**Procedure:** Load `references/phase-8-review.md`. It contains the 7-step procedure (fetch → classify into apply/push-back/clarify/out-of-scope → summarise to user → apply approved → push to fork → reply on threads → re-request review) and 4 hard rules (no silent re-pushing, no mid-review rebase, no force-push unless asked, escalate when feedback conflicts with Phase 1 hard rules).
 
 ## Hard rules
 
