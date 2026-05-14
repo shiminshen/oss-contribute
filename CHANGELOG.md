@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
 
+## [0.5.0] — 2026-05-14
+
+### Added — `contribute-upstream` Phase 3 step 0: Convention scan (BLOCKING before any code)
+
+Catch style divergence at **prevention** time, not just at audit time. The existing Phase 4 Convention audit catches divergence right before commit — by then the code is already written and any fix means churn. The new Phase 3 step 0 forces the model to read the surrounding code and absorb its conventions before writing the failing test or the fix.
+
+Two-stage check:
+
+- **Phase 3 step 0** — pre-coding scan. Open the closest existing test file end-to-end; note test structure, helper/mock-factory patterns, naming conventions, cross-cutting setup placement, comment density, lifecycle/async idioms, import style. Read recent merged PRs touching adjacent files (`gh pr list --search "<path>" --state merged --limit 3`) — they show what conventions the maintainers *enforce in review*, which may differ from what older files still show.
+- **Phase 4 Convention audit** — post-write verification. Re-read your changes against the same checklist; catch what slipped through. Updated wording to make the prevention/verification pairing explicit.
+
+Lesson from CopilotKit#4798 stands: the original failure produced review churn because three style divergences shipped in the first commit (ad-hoc inline cast, fetch stub repeated per test instead of `beforeEach`, raw Map exposed instead of factory controller functions). The pre-coding scan would have flagged all three before they were written.
+
 ## [0.4.1] — 2026-05-14
 
 ### Changed — compress duplicated passages in `find-issues`

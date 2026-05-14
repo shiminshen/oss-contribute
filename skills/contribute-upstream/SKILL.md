@@ -112,7 +112,20 @@ Do all of the following before touching any code. If any step surfaces a blocker
 
 This is the hardest step. In order:
 
-1. **Adapt the upstream's existing tests.** Find the test file closest to the affected code and add a failing case that mirrors the consumer-side symptom.
+0. **Convention scan (BLOCKING before any code, including the failing test).** Before writing a single line — even the failing test — read the surrounding code with this checklist. Your output must match what the maintainers already chose, not just compile and pass:
+   - **Test file structure.** Open the closest existing test file end-to-end. Note its `describe` / `it` shape, setup placement (`beforeEach` vs inline), assertion style (`expect(...)` chains used vs custom helpers), and how it organises arrange/act/assert.
+   - **Helpers and mock factories.** Do existing helpers return raw state (Maps, arrays) or only controller functions (`emitX`, `setY`)? Are there top-level mock factories you should reuse? Match the existing style; don't invent a parallel helper.
+   - **Naming.** What verb forms does the file use — `getX` / `createX` / `emitX`? What top-level named types does it declare for casts (e.g. `InspectorInternals`) vs ad-hoc inline `as` casts? Match the dominant pattern.
+   - **Cross-cutting setup.** Global stubs (fetch, timers, env) — are they in a top-level `beforeEach` alongside other setup, or inline per test? Match it.
+   - **Comment density and tone.** Does the file explain WHY each test exists with a multi-line preamble, or one-liners? Match it.
+   - **Lifecycle / async patterns.** Is there a standard "after every state change, `await component.updateComplete`" (or equivalent) idiom? Apply it without being asked.
+   - **Import style.** Relative vs alias paths? Type-only imports? Group ordering? Match it.
+
+   Read recent merged PRs touching adjacent files (`gh pr list --search "<file/path>" --state merged --limit 3`) — they show what conventions the maintainers *enforce in review*, which may differ from what's left in older files. When in doubt, match the most recent merged style.
+
+   This step is the **prevention** counterpart to Phase 4's post-write Convention audit. Doing it first means the audit confirms; skipping it means the audit catches mistakes after they're written — and produces review churn.
+
+1. **Adapt the upstream's existing tests.** Find the test file closest to the affected code and add a failing case that mirrors the consumer-side symptom — using the conventions captured in step 0.
 2. **Use the project's test harness** — do not invent a custom setup.
 3. **Bail out** if the bug depends on consumer-stack specifics the upstream can't reproduce (specific framework version, DB driver, env-specific behaviour). Switch to Phase 6 (issue-only).
 4. **Tractability gate (BLOCKING).** Before writing the fix, ask: *is the fix scope what the issue framing suggested?* Two failure modes to catch:
@@ -127,7 +140,7 @@ Confirm the new test fails for the **right** reason before writing a fix.
 - Run the targeted test → the full affected file → the project's `typecheck`.
 - If the fix touches a public API, update `docs/` per the project's docs convention.
 - Add a regression marker if the project uses one (e.g. `@see https://github.com/.../issues/<n>` block above the test).
-- **Convention audit (BLOCKING before commit).** When extending an existing spec or source file, your new code must match the patterns the maintainers already chose — not just pass tests. Re-read the surrounding file with this checklist:
+- **Convention audit (BLOCKING before commit).** Verify counterpart to Phase 3 step 0's pre-coding scan. Re-read your changes against the same checklist; the scan was prevention, this is verification. Catch what slipped through:
   - **Cast types**: does the file declare top-level named types (e.g. `InspectorInternals`) with a helper function, or inline ad-hoc casts? Match it.
   - **Mock factories**: do existing factories return raw state (Maps, arrays) or only controller functions (`emitX`, `setY`)? Match it.
   - **Global stubs**: are they in `beforeEach` alongside others, or inline per test? Match it.
