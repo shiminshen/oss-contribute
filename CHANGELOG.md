@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
 
+## [0.6.1] — 2026-05-15
+
+### Changed — listing-readiness pass (docs + metadata)
+
+Pre-submission cleanup for the Anthropic plugin marketplace. No behaviour change.
+
+- Trimmed `plugin.json` `description` from 247 → 108 chars so listing cards don't truncate.
+- Added `CONTRIBUTING.md` — extracts editing workflow, token-budget tiering, hard rules, and PR checklist from `CLAUDE.md` so external contributors have an on-ramp without reading internal-conventions files.
+- Added `CLAUDE.md` to version control (was untracked; referenced from CONTRIBUTING.md).
+- README: moved the "Why this instead of [other plugin]" comparison below the demo flows. New entrants benefit from in-README comparisons (Vite, Bun, pnpm pattern), but leading with one makes the page open defensively. Compromise: keep it, demote it.
+- README receipts: swapped placeholder for first real merged PR — [`cloudflare/workers-sdk#13908`](https://github.com/cloudflare/workers-sdk/pull/13908) (+14/-1).
+
 ## [0.6.0] — 2026-05-14
 
 ### Changed — `contribute-upstream` reference-file refactor
