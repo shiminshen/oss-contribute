@@ -9,10 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 
-- `pipeline` skill — status of your open/merged PRs across forks
-- `log` skill — generate a portfolio entry from merged contributions
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
+
+## [0.7.0] — 2026-05-15
+
+### Added — `log` skill
+
+Ports the canonical Phase B procedure from the personal `career-ops` umbrella into the plugin as a first-class skill. Generates a portfolio artifact from your merged upstream PRs in a configurable window (default 90 days).
+
+Output is hybrid by user preference: a table-of-contents table at the top (date, repo, PR#, diff size) so a reader can skim, plus one detail block per PR below (title, merge date, diff, first non-empty paragraph of the body verbatim, link). Sources content from `gh` + the PR title/body only — no inferred narrative, no diff-stat fabrication.
+
+Hard rules baked in, matching the rest of the plugin:
+
+- **No auto-publishing.** Writes to `~/Documents/oss-contribute/log-<YYYY-MM-DD>.md` or stdout, never to LinkedIn / X / a Gist / the consumer repo.
+- **Ask every time when accounts are ambiguous.** Same rule the other skills enforce.
+- **Restore the active gh account** after the skill switches to the profile-default for the run.
+- **No PR-body fabrication.** Empty/templated body → fall back to the title alone, do not write inferred context.
+- **Read-only.** Never modifies the profile, never opens a PR.
+
+Out of scope (deliberately — same reasoning as the rejected `pipeline` skill):
+
+- Open-PR status (`gh search prs --author @me --state open` is one line, see README "Checking your pipeline")
+- Journal of *bailed* contribution attempts (one-liner in the consumer repo's `CONTRIBUTIONS.md` is enough; not skill-shaped)
+
+The `career-ops` umbrella's Phase B will be updated in a follow-up to defer to this skill so there is one canonical home, per the plugin's "one authoritative home per procedure" rule.
 
 ## [0.6.1] — 2026-05-15
 

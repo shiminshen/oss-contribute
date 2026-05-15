@@ -10,9 +10,10 @@ Most "contribute to OSS" tools assume you're shopping for something to work on. 
 |---|---|---|
 | `find-issues` | `/oss-contribute:find-issues` | **Proactive** — ranked shortlist of ripe issues across your watched repos. Read-only; hands off to `contribute-upstream`. |
 | `contribute-upstream` | `/oss-contribute:contribute-upstream <pkg>` | **Reactive** — 8 phases from "I hit a bug in this package" to a merged PR. Pre-flight gate, repro bridge, fix, PR with confirmation gate, local-patch handoff, review response. |
-| `profile` | `/oss-contribute:profile` | View/edit the shared preferences file used by both skills. |
+| `log` | `/oss-contribute:log` | **Portfolio** — render your merged upstream PRs (default last 90 days) as a hybrid table + detail-block artifact. Read-only; writes a local file or stdout. |
+| `profile` | `/oss-contribute:profile` | View/edit the shared preferences file used by every skill. |
 
-All three skills read from one shared profile so settings never drift.
+All skills read from one shared profile so settings never drift.
 
 ## Install
 
@@ -168,14 +169,13 @@ Real contributions shipped using this workflow:
 
 ## Roadmap
 
-- `log` skill — portfolio entry generated from merged contributions
 - `do` / `guide` / `adaptive` operating modes
 - Per-repo conventions cache
 
 Considered and rejected:
 
 - **`pipeline` skill.** The `gh search prs --author @me` one-liner above already covers it; a skill wrapper would add ceremony without insight at the contribution volume this plugin is designed for.
-- **General contribution-progress journal** (per-PR state file, session log of what happened). Most of what you'd want to persist is already in GitHub (`gh pr view --json reviews,comments,reviewDecision`), the consumer repo (`patches/*.patch` from Phase 7), or two existing roadmap items (`log` skill for portfolio narrative, per-repo conventions cache for accumulated repo knowledge). A parallel side-journal creates a sync problem with GitHub and decays the moment it falls out of date. The one narrow gap — *why you bailed when no PR opened* (Phase 3 tractability gate, Phase 1 step 0a stalled-adjacent-PR) — is small enough to be a one-line append to a `CONTRIBUTIONS.md` in the consumer repo, not a skill.
+- **General contribution-progress journal** (per-PR state file, session log of what happened). Most of what you'd want to persist is already in GitHub (`gh pr view --json reviews,comments,reviewDecision`), the consumer repo (`patches/*.patch` from Phase 7), the `log` skill (portfolio narrative from merged PRs), or the roadmap per-repo conventions cache (accumulated repo knowledge). A parallel side-journal creates a sync problem with GitHub and decays the moment it falls out of date. The one narrow gap — *why you bailed when no PR opened* (Phase 3 tractability gate, Phase 1 step 0a stalled-adjacent-PR) — is small enough to be a one-line append to a `CONTRIBUTIONS.md` in the consumer repo, not a skill.
 
 ## Contributing
 
