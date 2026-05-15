@@ -1,6 +1,6 @@
 {
   "name": "oss-contribute",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Turn bugs you hit in third-party dependencies into upstream contribution PRs — without leaving your project.",
   "author": {
     "name": "shiminshen",

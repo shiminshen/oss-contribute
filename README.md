@@ -127,7 +127,7 @@ gh search prs --author @me --state open \
   --template '{{range .}}{{.repository.nameWithOwner}}#{{.number}}  {{.reviewDecision}}  {{timeago .updatedAt}}  {{.title}}{{"\n"}}{{end}}'
 
 # Merged in last 90 days (receipts)
-gh search prs --author @me --state merged --merged ">=$(date -v-90d +%Y-%m-%d)"
+gh search prs --author @me --merged --merged-at ">=$(date -v-90d +%Y-%m-%d)"
 ```
 
 `reviewDecision: CHANGES_REQUESTED` is the signal to re-enter `contribute-upstream` Phase 8 on that PR. If you find yourself running this often enough to want a skill, that's the signal to revisit the Roadmap below — until then, GitHub notifications + this command are enough.
@@ -156,6 +156,7 @@ See [`docs/profile.example.md`](./docs/profile.example.md) for the schema.
 Real contributions shipped using this workflow:
 
 - [`cloudflare/workers-sdk#13908`](https://github.com/cloudflare/workers-sdk/pull/13908) — `fix(wrangler): stop rewriting query strings that contain the request Host` (merged 2026-05-15, +14/-1 across 2 files)
+- [`santifer/career-ops#600`](https://github.com/santifer/career-ops/pull/600) — `fix(update-system): include .agents/ in SYSTEM_PATHS` (merged 2026-05-12, +1/-0)
 
 <!-- - [`<owner>/<repo>#<n>`](https://github.com/.../pull/N) — short description (YYYY-MM-DD) -->
 

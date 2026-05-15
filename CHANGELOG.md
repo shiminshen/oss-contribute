@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
 
+## [0.7.1] — 2026-05-15
+
+### Fixed — `log` skill bugs found by first real run
+
+Initial v0.7.0 of `log` was written from spec without dry-running against a live `gh` install. Running it against the first two real merged PRs (`cloudflare/workers-sdk#13908`, `santifer/career-ops#600`) surfaced multiple bugs in the same session:
+
+- **`gh search prs --state merged` is invalid.** The CLI accepts `open|closed` only. Correct form: `--merged` (flag) + `--merged-at ">=DATE"`. Phase 2 rewritten with the correct invocation. The same bug existed in the README's "Checking your pipeline" one-liner — fixed there too.
+- **`additions`, `deletions`, `changedFiles`, `mergedAt` are not available on `gh search prs`.** They only come back from `gh pr view <url>`. Phase 2 redesigned as two-pass: search returns URLs, then per-PR view fetches diff stats and merged timestamp. N+1 round-trips is fine for a bounded set (<30 PRs in a typical window).
+- **PR bodies can contain raw control characters** that break multi-record `jq` parses. Body is now fetched separately per PR via `gh pr view <url> --json body --jq .body` rather than included in the search response.
+- **"First non-empty paragraph" was too naive.** PRs commonly lead with `Fixes #N` or `Closes #N` reference-only paragraphs that aren't narrative. Body extraction now explicitly skips leading reference-only paragraphs (`Fixes`, `Closes`, `Resolves`, `Related:`, `Refs`, optionally `<owner>/<repo>`-prefixed) before picking the first informative paragraph. Also added `## Summary by CodeRabbit` and similar bot summaries to the strip list.
+- **README Receipts** missing `santifer/career-ops#600`. Added.
+
+The receipt-shape pattern matters more than the spec discipline here: writing a skill against documented CLI flags is no substitute for actually invoking the CLI on a real account. This is exactly the failure mode the plugin's own `contribute-upstream` Phase 3 step 0 catches in upstream PRs — applied to ourselves now.
+
 ## [0.7.0] — 2026-05-15
 
 ### Added — `log` skill

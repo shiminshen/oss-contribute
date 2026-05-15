@@ -37,7 +37,7 @@ If none exist, dispatch to the `profile` skill to set one up before continuing �
 3. If multiple `gh` accounts are logged in and the profile has no default, run `gh auth status` and ask the user which one to use. **Ask every time** when ambiguous — do not silently fall back to the active account.
 4. If the resolved account is not currently active, switch to it for the duration of this skill: `gh auth switch -u <login>`. Restore the original active account at the end (even on failure — use a trap or always-runs cleanup).
 
-## Phase 2 — Fetch merged PRs
+## Phase 2 — Fetch merged PRs (two-pass)
 
 Resolve the window:
 
@@ -45,16 +45,21 @@ Resolve the window:
 - `--since 30d` / `7w` / `3m` / `1y` → compute the date from today.
 - No flag → default to 90 days back from today.
 
-One `gh` call:
+**Pass 1 — list URLs.** `gh search prs` does *not* expose `additions`, `deletions`, `changedFiles`, or `mergedAt`. It also returns `body` inline, which sometimes contains raw control characters that break downstream `jq` parsing. So pass 1 only retrieves enough to identify each PR:
 
 ```bash
-gh search prs --author "@me" --state merged \
-  --merged ">=$WINDOW_START" \
+gh search prs --author "@me" --merged --merged-at ">=$WINDOW_START" \
   --sort updated --order desc --limit 100 \
-  --json url,title,repository,number,mergedAt,additions,deletions,changedFiles,body
+  --json url,number,repository,title
 ```
 
+Critical: `--state merged` is **not valid** (it accepts `open|closed` only). Use `--merged` (a flag) together with `--merged-at ">=DATE"` for the window. The README's "Checking your pipeline" one-liner uses the same form.
+
 If `--limit 100` is hit, warn the user and suggest a tighter window — the skill does not auto-paginate, because a portfolio entry that doesn't fit in one window is not a portfolio entry.
+
+**Pass 2 — per-PR detail.** For each URL from pass 1, call `gh pr view <url> --json mergedAt,additions,deletions,changedFiles`. Fetch `body` separately via `gh pr view <url> --json body --jq .body` so control characters don't fail a multi-record `jq` parse. Cache the per-PR result in a temp shell variable — do not re-query.
+
+Run pass 2 sequentially. N+1 round-trips is fine here — `log` runs on demand against a bounded set (typically <30 PRs in a 90-day window).
 
 ## Phase 3 — Render the artifact
 
@@ -99,9 +104,10 @@ Source from PR `title` + `body` verbatim. Do **not** invent context, do **not** 
 
 For the body block:
 
-1. Strip GitHub PR-template scaffolding: `## Test plan`, `## Checklist`, `<!-- ... -->` HTML comments, image markdown that points at user-attachments, AI-attribution trailers (the plugin's own rule applies in reverse here — if the body has one, drop the line).
-2. Take the first non-empty paragraph that remains. Cap at ~400 chars; truncate with `…` if longer.
-3. If the body is empty after stripping, fall back to the title alone — no fabricated "what the fix shipped" narrative.
+1. Strip GitHub PR-template scaffolding: `## Test plan`, `## Checklist`, `<!-- ... -->` HTML comments, image markdown that points at user-attachments, AI-attribution trailers (the plugin's own rule applies in reverse here — if the body has one, drop the line), and auto-generated bot summaries (e.g. `## Summary by CodeRabbit`).
+2. **Skip leading reference-only paragraphs** — paragraphs whose only content is one or more of `Fixes #N`, `Closes #N`, `Resolves #N`, `Related: #N`, `Refs #N`, or the same prefixed with `<owner>/<repo>` (e.g. `Fixes cloudflare/workers-sdk#13871`). These are issue links, not narrative. A naive "first non-empty paragraph" rule yields "Fixes #13871" as the body, which is useless.
+3. Take the next non-empty paragraph that remains. Cap at ~400 chars; truncate with `…` if longer.
+4. If nothing useful remains after stripping, fall back to the title alone — no fabricated "what the fix shipped" narrative.
 
 ### Sort order
 
