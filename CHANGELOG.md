@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
 
+## [0.7.2] — 2026-05-16
+
+### Fixed — `find-issues` triage gates strengthened by real-hunt failures
+
+Three new drop conditions / token-search rules in `find-issues`, each from a documented failure in the 2026-05-16 trending hunt:
+
+- **Module-augmentation tokens added to dup-PR search.** Token type 3 ("backticked code identifiers") now explicitly calls out import paths, augmented-module names from `declare module 'X' { ... }` blocks, and interface names being augmented (e.g. `Register`, `Routes`). Documented case: `TanStack/router#7399` ("server entry boilerplate gives type error") had an unmerged dup PR `#7357` ("fix(start): import Register from framework package so module augmentation works"). Title-paraphrase tokens (`server`, `boilerplate`) returned nothing; the dup was caught only when body tokens (`createServerEntry`, `Register`, `requestContext`) were tried. The shape — bug filed against documented module augmentation, fix described in terms of imports — is a class, not a one-off.
+
+- **AI-bot triage poisoning is now a BLOCKING gate.** New Phase 3 drop criterion: comments from accounts ending in `-agent`, `-bot`, `[bot]`, or self-disclosed AI agents are treated as **hypotheses, not facts**. Verify the referenced PR exists and was merged via `gh pr view`, and check any version-number claim against the actual npm registry. Documented case: `vercel/ai#15302` had a `kagura-agent` comment correctly identifying merged PR #14102 as the fix but fabricating the shipped version (`@ai-sdk/google-vertex@4.1.12` — actual latest on npm: `4.0.130`). The PR was real; the "shipped in" claim was a hallucination that *sounded right*. Treating the comment as a fact would have dropped a candidate that was actually viable.
+
+- **Subsystem stall** added as a drop criterion. When reaction-sorting surfaces an older bug (3+ months) with high engagement, check open PRs targeting the same file/subsystem; if ≥3 sit in `REVIEW_REQUIRED` with `created == updated` (opened then never iterated), drop. Whole-repo merge cadence is a misleading green light when a specific subsystem is dead. Documented case: `vercel/ai#6974` — maintainer @lgrammel personally reproduced 2025-08-29, root cause identified in-thread, but PRs #12875, #13209, #13851, #14689 all sat untouched since open-date despite the repo merging 50 PRs/week. Same shape as the profile-side `oss-subsystem-lockdown` lesson, hoisted into the skill itself so all users benefit.
+
+The 2026-05-16 hunt also reaffirmed an existing rule: trending-repo discovery is high-effort, low-yield in this ecosystem. The user's profile already documents trending hunts as a false-positive pattern; this session added two more skip-list entries (`millionco/react-doctor`: single-maintainer lockdown — `aidenybai` 20/20; `payloadcms/payload`: team-only merge pattern — 8 distinct authors / 30d, all core team) which are personal to the watchlist and go in the user's profile, not here.
+
 ## [0.7.1] — 2026-05-15
 
 ### Fixed — `log` skill bugs found by first real run

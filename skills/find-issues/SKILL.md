@@ -107,6 +107,8 @@ Drop the candidate if **any** of these is true:
 - The most recent maintainer comment says "we're working on this" / "PR incoming".
 - It's labelled `needs: info`, `wontfix`, `discussion`, `rfc`, or similar non-actionable.
 - It's older than 6 months with no activity.
+- **An AI-bot comment claims it's already fixed.** Treat comments from accounts ending in `-agent`, `-bot`, `[bot]`, or self-disclosed AI agents as **hypotheses, not facts**. Verify: (a) the referenced PR exists and is merged via `gh pr view`, (b) any version number claim matches the actual npm registry (`npm view <pkg> version`). Bots fabricate version numbers that *sound right*. Documented case: `vercel/ai#15302` had a `kagura-agent` comment correctly identifying merged PR #14102 as the fix but fabricating the version (`@ai-sdk/google-vertex@4.1.12` — actual latest on npm: `4.0.130`). Drop the candidate only after confirming the fix is shipped; if the bot is wrong about shipping, the bug may still be live.
+- **Subsystem stall.** When reaction-sorting surfaces an older bug (3+ months old, high engagement), check for open PRs targeting the same file/subsystem. If ≥3 of them are in `REVIEW_REQUIRED` state with `created == updated` (opened then never iterated), the subsystem is review-stalled — the maintainers are merging *other* areas but leaving this one to rot. Whole-repo merge cadence (50 PRs/7d) can be high while the specific subsystem is dead. Drop. Documented case: `vercel/ai#6974` (controller-close race on stream resume, maintainer @lgrammel reproduced 2025-08-29) — 4 separate PRs (#12875, #13209, #13851, #14689) all sat untouched since open-date.
 - **Scope/intent ambiguity** (feature gone, not bug). For issues filed against a `vN.0.0-beta/rc.M` of a package mid-rewrite, briefly check whether the missing thing exists in the new code paths. If wholly absent, demote to issue-comment-only. Full criteria + documented case (`drizzle-orm#5755`) in `contribute-upstream` Phase 3 step 4.
 - **Invitation-only upstream.** Drop if the upstream's contributing doc or PR template contains "invitation only" / "do not accept unsolicited" / "closed without review". Full check + documented case (`openai/codex`) in `contribute-upstream` Phase 1 step 2.
 
@@ -120,12 +122,15 @@ The four token types per candidate:
 
 1. **The issue number itself.** `"#93700"` and bare `"93700"` — many PR descriptions reference it.
 2. **URL-encoded or other distinctive literals** in the issue body — `%5F`, error codes, magic strings.
-3. **Backticked code identifiers** from the issue body — function names, file paths, type names (e.g. `` `LayoutRoutes` ``, `` `buildUpdateSet` ``).
+3. **Backticked code identifiers** from the issue body — function names, file paths, type names (e.g. `` `LayoutRoutes` ``, `` `buildUpdateSet` ``). Also include: import paths, augmented-module names from `declare module 'X' { ... }` blocks, and interface names being augmented (e.g. `Register`, `Routes`). Module-augmentation bugs are paraphrased away by title-keyword search.
 4. **Error message fragments** quoted in the body, if any.
 
 Each query: `gh search prs --repo <owner>/<repo> --state open --limit 5 <token>`.
 
-A title-keyword search alone is not enough. Documented failure case: issue titled "Layouts for paths that start with underscore (%5F)…" had an open PR titled "fix(typegen): normalize %5F to _…" — caught only by the `%5F` token search.
+A title-keyword search alone is not enough. Documented failure cases:
+
+- Issue titled "Layouts for paths that start with underscore (%5F)…" had an open PR titled "fix(typegen): normalize %5F to _…" — caught only by the `%5F` token search.
+- `TanStack/router#7399` ("server entry boilerplate gives type error") had open PR `#7357` ("fix(start): import Register from framework package so module augmentation works"). Token search using title-paraphrases `server,boilerplate` returned nothing; the dup was caught only when the body tokens `createServerEntry`, `Register`, `requestContext` were tried.
 
 If any PR query hits, drop the candidate.
 
