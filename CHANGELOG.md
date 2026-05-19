@@ -12,6 +12,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
 
+## [0.7.5] — 2026-05-19
+
+### Added — `find-issues` detects "invitation-by-fast-close" repos at Phase 2
+
+A new failure mode the existing lockdown checks missed.
+
+The existing repo-activity tiers (Hot/Active/Slow/Dormant) and the "≥3 distinct external authors merged in last 30d" filter are evaded by repos that look healthy on paper but enforce a policy where new-contributor PRs get auto-closed within minutes pending a maintainer `lgtmi`. The 30d-distinct-author count includes pre-approved contributors, so the repo passes the lockdown check; the user only discovers the policy after burning half a day on a PR that gets closed in 10 seconds.
+
+The existing Phase 3 "Invitation-only upstream" drop searches for literal CONTRIBUTING phrases ("invitation only" / "do not accept unsolicited" / "closed without review"). That phrase-match misses repos that enforce the same policy without writing it in those exact words.
+
+Two coupled changes:
+
+**1. New "Invitation-by-fast-close" repo-activity tier** (Phase 2). When the distinct-author count looks healthy (≥10 in 30d) but a single top contributor still owns the bulk of merges, sample the last ~10 closed-not-merged PRs from non-top-contributors and inspect `closed_at - created_at`. If 3+ were closed within minutes-to-hours with no review iteration, drop the repo entirely. Internal-tracking labels like `closed-because-weekend`, `closed-because-refactor`, `possibly-X-clanker` are corroborating evidence.
+
+**2. Strengthened Phase 3 "Invitation-only" drop** to also accept fast-close evidence even without the literal CONTRIBUTING phrase, with a cross-reference to the new Phase 2 tier.
+
+Documented case: `earendil-works/pi` (2026-05-19) — 51k stars, 45 distinct merged authors in 30d (mitsuhiko top at ~17%), looked like the healthiest trending repo. In reality #4736/#4588 closed in 10s, #3517 closed in 2h, all from `NONE`-association authors. The 44 non-mitsuhiko PRs were pre-approved contributors. Scout subagent burned full enrichment on 30 candidates before realising none could land.
+
+## [0.7.4] — 2026-05-17
+
+### Changed — `contribute-upstream` stops re-prompting for the GitHub account AND now enforces a matching git commit identity
+
+Two coupled changes for the same problem: getting the *commit attribution* right on OSS PRs without forcing the user to answer the same question every time.
+
+**1. No more re-prompting for the GitHub account.** Phase 1 step 7 previously read the profile's `## Default GitHub account` only as a *proposed* default and then explicitly asked the user which account to fork from, on every single contribution. The justification was "do not silently use the profile default" — written for an early version where the wrong account could leak.
+
+In practice this re-prompt fires on every run for users who have a stable mapping (e.g. personal `shiminshen` for all OSS, company `damonshen17` reserved for work). The profile entry IS the standing instruction. Asking again treats it as ephemeral.
+
+New behaviour: read the profile default and **use it without asking** — even when `gh auth status` shows multiple accounts. State the chosen account in the Phase 1 step 8 summary so it remains visible. Re-prompt only if the profile has no default field at all, or if the user has corrected the account within the same session.
+
+**2. New: set local git `user.name` / `user.email` on every clone (BLOCKING before commit).** Picking the right *GitHub account* for the PR is only half the answer. The other half is the *git commit identity* — `git config user.name` / `user.email` — which is typically inherited from the user's global config and is usually their work email (e.g. `damon@deeplearning.ai`). Without intervention, an OSS PR would appear under the personal GitHub account while every commit in `git log` is forever stamped with the work email. Exactly the wrong signal.
+
+The skill now reads a new `## Git commit identity` profile section (name + email, suggested format: GitHub noreply like `<id>+<login>@users.noreply.github.com` to keep real email private) and runs `git -C <clone-dir> config user.name/email <profile values>` immediately after `git clone` / `gh repo clone`, before any commit. Phase 2 step 2 makes this BLOCKING — verify with a follow-up `git -C <clone-dir> config user.email` before proceeding.
+
+If the profile lacks the identity section, ask the user explicitly — never silently inherit the global identity for an OSS clone.
+
+Documented preference: the `oss-personal-account` memory captures the personal-vs-company split and the standing instruction. Example profile section users should add (see `docs/profile.example.md` if you want a template):
+
+```
+## Git commit identity
+- name: shiminshen
+- email: 16914659+shiminshen@users.noreply.github.com
+```
+
+## [0.7.3] — 2026-05-17
+
+### Fixed — `find-issues` drops issues where the reporter has offered to open the PR themselves
+
+New Phase 3 drop criterion: if the issue body contains a ready-to-apply diff PLUS a self-claim from the reporter ("Happy to open a PR", "I'll send a PR", evidence they already built+tested locally), drop the candidate. No assignee is set only because the reporter hasn't pushed the button yet.
+
+The reactive path (`contribute-upstream`) would already catch this at Phase 1's freshness re-check via the issue body, but by then the user has invested attention in the candidate. Catching it in `find-issues` keeps the shortlist clean.
+
+Documented case: `amruthpillai/reactive-resume#3077` (filed 2026-05-16 by `netooran`). Reporter wrote the complete root-cause analysis, posted a two-file diff in fenced ` ```diff ` blocks, and ended with "Happy to open a PR with the patch above. Verified the fix end-to-end" — but the scout's prior heuristics flagged this as a *positive* signal ("ready diff = best candidate, ~30 min fix"), ranking it #1. The user caught the trap at the `contribute-upstream` handoff. Three reasons to drop, not lift:
+
+1. Community courtesy — beating the reporter to their own PR is rude.
+2. Maintainer optics — visibly lifting another contributor's analysis reads as credit-stealing.
+3. Portfolio quality — for users running `log`, a PR that visibly originated from someone else's diff is a worse signal than no PR.
+
+The detection is cheap: scan the issue body for fenced ` ```diff ` blocks, "Proposed fix" sections authored by the reporter, or explicit offer phrases. Add to the Phase 3 drop list alongside the existing AI-bot, subsystem-stall, and invitation-only gates.
+
 ## [0.7.2] — 2026-05-16
 
 ### Fixed — `find-issues` triage gates strengthened by real-hunt failures

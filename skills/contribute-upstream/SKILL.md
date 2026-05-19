@@ -94,7 +94,22 @@ Do all of the following before touching any code. If any step surfaces a blocker
    - Open PR found via `gh search prs` for the same fix → same: review/test, don't compete.
    - Closed PR → read why; that reason (scope, design objection, maintainer pushback) often blocks the same fix even if the bug is real.
 6. **CLA check.** Look for `.github/cla.yml`, `cla-assistant`, or a CLA note in CONTRIBUTING. Surface CLA requirements before any code work.
-7. **Pick the GitHub account.** If the shared profile exists, read its `## Default GitHub account` as the proposed default. Run `gh auth status` to list logged-in accounts. If more than one is present, **ask the user explicitly** which account to fork from and open the PR with — do not assume the active `gh` account, and do not silently use the profile default. Also confirm the git author identity (`user.name`, `user.email`) to use for the commit; default to the user's **personal** identity unless they say otherwise.
+7. **Pick the GitHub account AND the git commit identity (must match).** Read the shared profile's `## Default GitHub account` AND `## Git commit identity` (the `name:` and `email:` lines). **Use both without re-prompting** — even when `gh auth status` shows multiple accounts logged in. The profile entries are the user's standing instructions; re-asking on every contribution treats stable preferences as ephemeral and creates friction. State the chosen account + name + email once in the Phase 1 step 8 summary so they're visible, but do not put them behind questions. The user will override per-invocation if they want a different identity ("use the company account this time"); otherwise honour the profile.
+
+   **Critical: commit identity must match GitHub account.** The default `git config --global user.email` is typically the user's day-job email (e.g. `damon@deeplearning.ai`). If the OSS clone inherits this, the PR appears under the personal GitHub account BUT every commit is stamped with the company email — exactly the wrong signal, and visible forever in `git log`. After the Phase 2 clone, set local repo identity explicitly:
+
+   ```
+   git -C <clone-dir> config user.name "<profile name>"
+   git -C <clone-dir> config user.email "<profile email>"
+   ```
+
+   Verify before any commit:
+   ```
+   git -C <clone-dir> config user.email
+   # must match the profile's email, not the global one
+   ```
+
+   If the profile has no `## Git commit identity` section, fall back to asking the user explicitly — never silently inherit the global identity for an OSS clone. **Only re-prompt for account/identity** if the profile fields are absent, or if the user has corrected the choice within the same session.
 8. **Confirm with user.** Summarise findings (repo, version, dup status, conventions, CLA, branch target, changeset y/n, chosen GitHub account, chosen git identity) in ≤10 lines. Get explicit go-ahead before Phase 2.
 
 ## Phase 2 — Setup
@@ -104,8 +119,15 @@ Do all of the following before touching any code. If any step surfaces a blocker
    If a new PR has appeared, stop and offer to review/test it instead of competing.
 
 1. Clone the user's **fork** (create one with `gh repo fork` first if absent) to a **sibling directory** of the consumer repo — never inside it.
-2. Install deps with the project's pinned package manager (`corepack prepare` / `corepack enable` if needed). Honour `.nvmrc`.
-3. Run the project's baseline `test` and `typecheck` to confirm a clean starting state. If they fail on the default branch, surface that — do not try to "fix" baseline failures.
+2. **Set local git identity (BLOCKING before any commit).** Immediately after clone, set the repo-local `user.name` and `user.email` from the profile's `## Git commit identity` so commits are not stamped with the user's global (typically work) identity:
+   ```
+   git -C <clone-dir> config user.name "<profile name>"
+   git -C <clone-dir> config user.email "<profile email>"
+   git -C <clone-dir> config user.email   # verify
+   ```
+   This is the safety net for the Phase 1 step 7 decision. If the profile lacks the identity section, ask the user explicitly — never let the global identity be inherited by an OSS clone. Documented failure mode: PR appears from personal GitHub account but `git log` shows every commit under the work email, visible forever.
+3. Install deps with the project's pinned package manager (`corepack prepare` / `corepack enable` if needed). Honour `.nvmrc`.
+4. Run the project's baseline `test` and `typecheck` to confirm a clean starting state. If they fail on the default branch, surface that — do not try to "fix" baseline failures.
 
 ## Phase 3 — Reproduce in the upstream's own test framework
 

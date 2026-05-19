@@ -30,6 +30,13 @@ next.js, react, prisma, vitest, drizzle, tailwind
 ## Default GitHub account
 shiminshen
 
+## Git commit identity
+Used to set repo-local `git config user.name` / `user.email` after each `git clone`, so OSS commits aren't stamped with your global (often work) identity. Prefer the GitHub noreply form to keep your real email private.
+- name: shiminshen
+- email: 16914659+shiminshen@users.noreply.github.com
+
+(Replace `16914659` with your numeric GitHub user ID — find it with `gh api user --jq .id` while logged in as the personal account.)
+
 ## Default budget
 1h
 
