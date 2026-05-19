@@ -45,9 +45,17 @@ Do all of the following before touching any code. If any step surfaces a blocker
 
    Motivating case: `mastra-ai/mastra#16422` (late assignee). See `references/case-studies.md#freshness--late-assignee-phase-1-step-0`.
 
-0a. **Adjacent-stalled-PR check (BLOCKING).** Search for any open PR in the *same code area* that has been stalled. Run `gh pr view <stalled-pr-number> --json reviews,comments,reviewDecision` — **zero reviews + zero comments + `REVIEW_REQUIRED` for 30+ days** is the "dead area" signal. Surface to the user before investing.
+0a. **Adjacent-PR check (BLOCKING).** Search for any open PR in the *same code area* and inspect each. Two distinct drop signals — either is BLOCKING.
 
-   Motivating case: `vercel/ai#13962` adjacent to stalled `#12924`. See `references/case-studies.md#adjacent-stalled-pr--dead-area-signal-phase-1-step-0a`.
+   **Dead-area signal (adjacent PR is stalled).** Run `gh pr view <pr> --json reviews,comments,reviewDecision,updatedAt` — **zero reviews + zero comments + `REVIEW_REQUIRED` for 30+ days** means the area is reviewer-cold. A fresh PR faces the same fate. Surface and stop.
+
+   **Moving-target signal (adjacent PR is active and reshapes a shared interface).** After resolving the file(s) your fix will touch, list the interface symbols / imports those files depend on. For each, search:
+   ```
+   gh search prs --repo <owner>/<repo> --state open <symbol-or-file-path>
+   ```
+   For each hit, run `gh pr view <pr> --json files,reviews,comments,updatedAt`. If the PR is **active** (reviews/comments non-empty, `updatedAt` within ~14 days) AND its `files` list includes an interface file your fix imports — even when there is no textual overlap with your fix's files — surface to the user. The textual dup-PR search won't catch this because the PRs are about different surfaces; the risk is coordination (which signature do you call?), not duplication. Right call is usually one of: wait for the adjacent PR to land, comment on your issue asking the maintainer how to sequence, or abort.
+
+   Motivating cases: `vercel/ai#13962` adjacent to stalled `#12924` (dead area); `topoteretes/cognee#2815` adjacent to active `#2712` (shared `vector_db_interface.py`). See `references/case-studies.md#adjacent-stalled-pr--dead-area-signal-phase-1-step-0a` and `references/case-studies.md#adjacent-active-pr-on-shared-interface--coordination-risk-phase-1-step-0a-inverse-shape`.
 
 0b. **Already-fixed-on-main check (BLOCKING).** Read the version the reporter is on from the issue body. Compare to current `main`'s version + recent commits to the file path the reporter mentions. If a fix-shaped commit landed *between the reporter's version and main*, the bug may already be fixed — the reporter just needs to upgrade. Verify by running the existing tests for that file. If they pass on main, drop and offer to comment pointing the reporter to the version that fixes it.
 

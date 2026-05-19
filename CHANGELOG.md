@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
 
+## [0.7.6] — 2026-05-19
+
+### Added — `contribute-upstream` Phase 1 step 0a now also catches *active* adjacent PRs that reshape a shared interface
+
+The existing step 0a check only caught the "dead area" shape — an adjacent open PR with zero engagement sitting 30+ days. It missed the inverse: an *active* adjacent PR that reshapes the interface your fix calls into. Files don't textually overlap, so the token-based dup-PR search returns nothing; the risk is that the interface gets reshaped mid-review and your work has to either wait or chase a moving target.
+
+Step 0a now describes both shapes — dead area (no engagement, stalled) and moving target (active, reshapes shared interface) — with separate cheap checks for each. Step renamed from "Adjacent-stalled-PR check" to "Adjacent-PR check" to reflect the broader scope.
+
+Documented case: 2026-05-19, `topoteretes/cognee#2815` (small feature: plumb `node_name` through `ChunksRetriever`) passed every existing gate — freshness, token dup-PR search, "already fixed on main" — but adjacent open PR #2712 (`fix: implement include_payload and node_name filter in ChromaDBAdapter`) was reshaping the shared `vector_db_interface.py` mid-review: 4 reviews, 6 comments, CodeRabbit auto-paused for active development. Token dup search returned nothing because the PRs are about different layers (retriever vs adapter). Caught only by a manual Phase 1 scan; without that scan, the contributor would have shipped against an interface that may not exist post-#2712-merge.
+
 ## [0.7.5] — 2026-05-19
 
 ### Added — `find-issues` detects "invitation-by-fast-close" repos at Phase 2
