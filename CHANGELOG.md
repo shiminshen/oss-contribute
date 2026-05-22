@@ -12,6 +12,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
 
+## [0.8.0] — 2026-05-22
+
+### Added — `find-issues --trending [daily|weekly]` for trending-repo discovery
+
+A new flag promotes the previously-undocumented ad-hoc workflow (running trending hunts manually from a profile-skip-list pattern) into a first-class entry point with explicit drop rules.
+
+The default mode's "no invented watchlist" hard rule was the right default — popular/curated repos are nearly always the highest-yield surface — but in practice the user runs trending hunts roughly weekly and the skill had no documented support for them. Past hunts were ad-hoc shell sessions that re-derived the same drop rules from the profile's skip list; this change captures those rules in the skill and adds two new ones surfaced by today's hunt.
+
+**New Phase 2 sub-section "Trending-mode discovery"** runs *before* the per-repo issue-search fan-out:
+- **Step T1** — fetch `github.com/trending/<lang>` (daily + weekly) via WebFetch since `gh` has no trending endpoint
+- **Step T2** — de-dupe against the profile's watched and skip lists, cap survivor pool at ~7
+- **Step T3** — aggressive repo-level gate (parallel batched) with three stricter drop rules
+- **Step T4** — continue with the unchanged Phase 2 per-repo issue search
+
+**Three trending-only drop rules** beyond the existing Hot/Active/Slow/Dormant/Invitation-by-fast-close tiers:
+
+1. **Top-contributor ≥60% lockdown** (stricter than the default 70% on watched repos, because trending hunts have no prior trust signal).
+2. **Team-only namespace lockdown** — verify via `gh api users/<login> --jq .email,.bio` on the top 2–3 if all logins share an org prefix.
+3. **AI-bot-as-merge-author** — drop if any account ending in `-agent` / `-bot` / `[bot]` (excluding dependency bots like dependabot/renovate) appears in the top 5 merge-counted authors. Documented cases: `archestra-ai/archestra` (2026-05-22, `archestra-contributor-pr-bot` owned 73% of 30d merges) and `anomalyco/opencode` (2026-05-22, `chaodu-agent` appears in fast-close-rejected externals).
+
+**Phase 5 addendum** surfaces *skip-list candidates* — repos that failed the trending gate — as a paste-ready block at the end of the hand-off. The skill never writes to the profile; the user pastes via `/oss-contribute:profile edit`. The hard-rules section now explicitly bans profile writes, including skip-list additions.
+
+**Phase 5 issue-cluster hint** — when 3+ ranked candidates target the same surface (e.g. four `evaluate_script` tool-description bugs in `ChromeDevTools/chrome-devtools-mcp`, 2026-05-22), flag the bundling opportunity in one line. Don't decide for the user; surface it.
+
+**Rate-limit hygiene** (new sub-section, applies to all modes but bites hardest in `--trending`) — the GitHub search API's secondary rate limit kicks in after ~10–30 rapid queries. Trending mode fans out across 7+ repos × ~3 queries each. Documented case from today's hunt: the 5th-7th repo gate calls returned `HTTP 403 secondary rate limit`. Pre-flight check (`gh api rate_limit --jq '.resources.search.remaining'`) and polling pattern (`until ... ; do sleep 15; done`) added.
+
+Documented successful trending hunt (2026-05-22, TypeScript daily+weekly): 30 trending repos → 7 candidates after de-dupe → 1 survivor after gate (`ChromeDevTools/chrome-devtools-mcp`) → 5 ripe issues (`#1892`, `#1894`, `#1895`, `#1896`, `#1217`), with 4 of 5 in the same `evaluate_script` tool-description cluster. The gate rejected 6/7 candidates and the cluster-bundling hint surfaced naturally — both surfaces validated end-to-end.
+
 ## [0.7.6] — 2026-05-19
 
 ### Added — `contribute-upstream` Phase 1 step 0a now also catches *active* adjacent PRs that reshape a shared interface
