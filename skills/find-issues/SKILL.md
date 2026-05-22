@@ -16,9 +16,10 @@ The proactive sibling of `contribute-upstream`. Use when the user wants to **sho
 /oss-contribute:find-issues --repo better-auth/better-auth # focus on one repo
 /oss-contribute:find-issues --budget 30m | 1h | weekend    # only suggest issues that fit
 /oss-contribute:find-issues --refresh                      # ignore any cached results
+/oss-contribute:find-issues --trending [daily|weekly]      # discover repos via github.com/trending (default: daily)
 ```
 
-Stable preferences live in the shared profile (see "Profile location" below). Args are per-invocation overrides only. Cap at the four flags above — if you need more knobs, edit the profile.
+Stable preferences live in the shared profile (see "Profile location" below). Args are per-invocation overrides only. Cap at the flags above — if you need more knobs, edit the profile.
 
 ## Profile location
 
@@ -43,6 +44,8 @@ The profile covers:
 - **What "ripe" means** — heuristic seed for ranking.
 
 ## Phase 2 — Discover candidates
+
+> **Trending mode** (`--trending`): expand the candidate pool with repos from `github.com/trending/<lang>` before per-repo issue search. See "Trending-mode discovery" below — it adds an extra repo-list-building step that runs *before* the per-repo subagents fan out. Everything after that is identical to the default path.
 
 **Dispatch one `general-purpose` subagent per repo in a single message.** Not one-at-a-time — one message containing N parallel `Agent` tool calls, where N = number of watched repos. The instructions read sequentially but the calls must be batched; otherwise the model often serialises them.
 
@@ -166,6 +169,44 @@ Stars are a weak popularity signal — use only as a tiebreaker between two same
 
 Cache the per-repo signals for the duration of one `find-issues` invocation (don't re-fetch across the Phase 2 ↔ Phase 3 boundary).
 
+### Trending-mode discovery (`--trending`)
+
+When invoked with `--trending`, build the candidate-repo list from `github.com/trending` *before* the per-repo issue search. The rest of Phase 2/3 runs unchanged on that list. This is opt-in because trending hunts are **high-effort, low-yield** in most stacks — the user's profile typically records past trending hunts as false-positive patterns.
+
+**Step T1 — Fetch trending HTML.** `gh` has no trending endpoint. Use WebFetch on both:
+
+```
+https://github.com/trending/<lang>?since=daily
+https://github.com/trending/<lang>?since=weekly
+```
+
+Default `<lang>` from profile's `## Languages`. Default `since=daily` unless the user passed `weekly`. Ask the WebFetch model to return only `owner/repo — short description — stars` per line, no commentary.
+
+**Step T2 — De-dupe and filter.** From the merged trending lists, drop:
+- Anything in the profile's `## Watched repos` (already known).
+- Anything in the profile's `## Skip list` (already known to be a lockdown).
+- Single-owner-namespace repos that smell solo (`<one-name>/<project>` with no organisation backer) — defer to gate signals rather than auto-dropping, but prioritise obvious multi-org candidates first.
+- Non-code repos (skill libraries, content registries, "awesome-X" lists).
+- Language barriers if the description is unclear and the repo isn't your stack.
+
+Cap the survivor pool at ~7 repos before gating. Trending is noisier than the watched list; over-fanning out burns rate limit fast.
+
+**Step T3 — Aggressive repo-level gate** (one batched message, all repos in parallel). For each survivor, fetch `gh api repos/<o>/<r>` + `gh api -X GET search/issues -f q="repo:<o>/<r> is:pr is:merged merged:>=<date-30d>" -f per_page=50 --jq '.items[].user.login' | sort | uniq -c | sort -rn`. Apply the existing Hot/Active/Slow/Dormant/Invitation-by-fast-close tiers AND these stricter trending-only drops:
+
+- **Top-contributor ≥60% lockdown.** Stricter than the default 70% on watched repos because trending hunts have no prior trust signal. If one human author (excluding bots) holds ≥60% of merged PRs in the last 30 days, drop.
+- **Team-only namespace lockdown.** If all top-5 merge-counted humans share an `@<org>.com` email or all-`<org>`-prefixed logins (visible via `gh api users/<login> --jq .email,.bio` on the top 2–3), the repo is internal-engineering-only. Drop.
+- **AI-bot-as-merge-author.** If any account ending in `-agent` / `-bot` / `[bot]` appears in the top 5 merge-counted authors (excluding dependabot/renovate which are dependency bots, not contribution bots) — e.g. `archestra-contributor-pr-bot`, `chaodu-agent` — the repo is gamified or LLM-flooded. Drop. Documented case: `archestra-ai/archestra` (2026-05-22), `anomalyco/opencode` (2026-05-22).
+
+For each *dropped* repo, prepare a one-line skip-list candidate (`<owner>/<repo>` — short reason — date) to surface to the user at Phase 5. **Do not** write to the profile — this skill is read-only. The user copy/pastes into their profile via `/oss-contribute:profile edit`.
+
+**Step T4 — Continue with Phase 2 issue search** on the survivors. Same per-repo subagent fan-out as the default path.
+
+### Rate-limit hygiene (applies to all modes, but bites hardest in `--trending`)
+
+The GitHub search API enforces a secondary rate limit that triggers after ~10–30 rapid queries. Trending mode fans out across 7+ repos × {repo metadata, merged-author search, fast-close sample}, so the budget evaporates quickly.
+
+Before running the per-repo gate batch, check budget once: `gh api rate_limit --jq '.resources.search.remaining'`. If <15, poll (`until gh api rate_limit --jq '.resources.search.remaining' | awk '{exit !($1 > 15)}'; do sleep 15; done`) before fanning out. If the gate batch itself hits 403 (secondary rate limit), poll-and-retry only the failed queries — don't restart the whole batch.
+
 ## Phase 4 — Output
 
 **Pre-output freshness re-check (BLOCKING).** Scout subagents may have run minutes ago and a PR can land in that window — your shortlist goes stale. Before emitting the ranked list, re-run the Phase 3 duplicate-PR search against the top-5 candidates in a single batched message, plus `gh issue view <n> --json closedByPullRequestsReferences,assignees,state`. Drop any candidate where a new PR has appeared. Documented failure: 2026-05-13 hunt — `mastra-ai/mastra#16514` passed the scout's dup-PR check; PR #16545 opened ~10 minutes later. Caught only when the user explicitly asked "did you check no existing PR?"
@@ -188,9 +229,21 @@ Ask the user to pick one. On pick:
 - Open the issue in the browser: `gh issue view <n> --web`.
 - Suggest `/oss-contribute:contribute-upstream <package>` to start the reactive flow with that issue as context. Do **not** auto-invoke.
 
+**Trending-mode addendum.** After the ranked list, surface any skip-list candidates collected in Step T3 as a separate block:
+
+```
+Suggested skip-list additions (paste into profile via /oss-contribute:profile edit):
+- <owner>/<repo>  # <reason — date>
+```
+
+Be terse and accurate — the user audits and pastes manually. Do **not** modify the profile from this skill.
+
+**Issue-cluster hint.** When the top-5 contains 3+ candidates targeting the same file or tool surface (e.g. four `evaluate_script` tool-description bugs in `chrome-devtools-mcp`, 2026-05-22), call it out in one line: "Issues #X/#Y/#Z share <surface> — one PR could close all three." Don't decide for the user; just flag the opportunity. Bundled PRs read better to maintainers when the bugs are genuinely sibling-shaped.
+
 ## Hard rules
 
-- **Read-only.** Never open issues, PRs, or comments from this skill. Writes only happen via `contribute-upstream` after the user picks a candidate.
-- **No invented watchlist.** Use only what's in the profile (or supplied via `--repo`).
+- **Read-only.** Never open issues, PRs, or comments from this skill. Writes only happen via `contribute-upstream` after the user picks a candidate. **Never write to the profile** — including skip-list additions discovered in trending mode. Surface, the user pastes.
+- **No invented watchlist** (default mode). Use only what's in the profile (or supplied via `--repo` or `--trending`).
+- **Trending mode surfaces, never replaces.** `--trending` augments the candidate pool for one invocation. It does not edit the watched list.
 - **No auto-handoff.** Always pause for the user to pick.
-- **Surface, don't pad.** If nothing is ripe today, say so. A short honest list beats a long padded one.
+- **Surface, don't pad.** If nothing is ripe today, say so. A short honest list beats a long padded one. Trending hunts especially: 0 ripe survivors is the most common outcome — say so plainly.
