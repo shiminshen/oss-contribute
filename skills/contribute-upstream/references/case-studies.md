@@ -26,6 +26,27 @@ Each entry is the story; the procedural check stays inline in the SKILL.md phase
 
 ---
 
+## Adjacent ACTIVE PR on shared interface — coordination risk (Phase 1 step 0a, inverse shape)
+
+**Case:** 2026-05-19, `topoteretes/cognee#2815` (small feature: plumb `node_name` through `ChunksRetriever`) passed every existing gate — freshness, token dup-PR search, "already fixed on main" — but a Phase 1 manual scan turned up open PR #2712 (`fix: implement include_payload and node_name filter in ChromaDBAdapter`). Active, not stalled: 4 reviews, 6 comments, CodeRabbit auto-paused "because the branch is under active development." It touched 6 files including `cognee/infrastructure/databases/vector/vector_db_interface.py` and the same adapters (`PGVectorAdapter.py`, `LanceDBAdapter.py`) the `ChunksRetriever` fix would call into.
+
+The PRs do not textually overlap — different files, different layer (retriever vs adapter). Token dup search returns nothing on the issue body identifiers (`ChunksRetriever`, `node_name_filter_operator`) because the PR is genuinely about a different surface. But the *interface* the retriever calls is being reshaped mid-review. If #2712 lands first, the retriever needs to match whatever final signature ships. If the retriever PR lands first, #2712 hits conflicts that aren't its fault. Either way, the contributor inherits coordination work that doesn't fit a 1-hour budget.
+
+**Lesson:** The existing Phase 1 step 0a check (`zero reviews + zero comments + REVIEW_REQUIRED for 30+ days`) only catches the *stalled* dead-area shape. An adjacent PR that is **active and touches the interface our fix calls into** is a different drop signal — the risk isn't a dead area, it's a moving target. Extending step 0a:
+
+- After resolving the file(s) your fix will touch, also list the *imports* / interface symbols those files depend on.
+- For each, run a quick `gh search prs --repo <owner>/<repo> --state open <symbol>` looking for PRs touching the imported file or interface symbol.
+- If a non-stalled PR (recent activity, has reviews/comments) is reshaping the interface you'll call into, surface to the user before clone. The right call is usually one of: (a) wait for that PR to land, (b) comment on your issue asking the maintainer how they want this sequenced, or (c) abort.
+
+**Cheap check:**
+```
+gh pr view <adjacent-pr> --repo <owner>/<repo> --json files,reviews,comments,updatedAt
+# is it active? (reviews/comments non-empty, updatedAt recent)
+# does its `files` list overlap interface files your fix imports?
+```
+
+---
+
 ## Already fixed on main — wrong slice of the version axis (Phase 1 step 0b)
 
 Three same-shape cases on 2026-05-14:
