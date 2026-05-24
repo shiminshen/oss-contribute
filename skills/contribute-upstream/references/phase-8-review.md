@@ -6,6 +6,27 @@ After the PR is open, maintainers will (eventually) review and almost always req
 
 ## Steps
 
+0. **Competing-merge re-check (BLOCKING).** Before classifying any feedback or planning a push, verify the *upstream* hasn't fixed the same bug under your nose. A PR that sits in review for days is exposed to maintainers landing a competing fix on the same surface — when that happens, your PR is functionally dead and the right move is to close it (or rebase + narrow scope), not to keep iterating on review comments.
+
+   For each file your PR touches, list commits to `main` since the PR was opened:
+
+   ```
+   PR_OPENED=$(gh pr view <n> --repo <upstream> --json createdAt --jq .createdAt)
+   for f in $(gh pr view <n> --repo <upstream> --json files --jq '.files[].path'); do
+     gh api "repos/<upstream>/commits?path=$f&since=$PR_OPENED" \
+       --jq '.[] | {sha: .sha[:8], date: .commit.author.date, msg: (.commit.message | split("\n")[0])}'
+   done
+   ```
+
+   For each hit, check whether the commit is a competing fix for your bug. Read the commit's linked PR (the merged-PR number is usually in the subject) and compare its scope to yours.
+
+   Three outcomes:
+   - **Competing merge ships the same bug fix (different approach):** Surface to user. Default action is to close your PR with a graceful thank-you comment pointing at the merged PR. Do not re-push.
+   - **Competing merge changes the file but addresses a different bug:** Note the conflict surface; your PR likely needs a rebase before any further push.
+   - **No competing merge:** Proceed to step 1.
+
+   Motivating case: `better-auth/better-auth#9605`. See `references/case-studies.md#mid-review-competing-merge-phase-8-step-0`.
+
 1. **Fetch the review state.**
 
    ```

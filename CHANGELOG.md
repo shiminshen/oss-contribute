@@ -12,6 +12,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
 
+## [0.9.0] — 2026-05-24
+
+### Added — `contribute-upstream` catches label-scoped invitation-only conventions (Phase 1 step 0c)
+
+Some projects enforce internal-team-only policy **scoped to specific issue labels**, not to the whole repo or to prose in CONTRIBUTING. Existing Phase 1 step 2 detection (scan CONTRIBUTING / PR template for "invitation only" / "do not accept unsolicited" / etc.) reads docs that never mention the label-scoped rule — the policy is enforced by a maintainer closing external PRs with a brief "the team handles this label" comment.
+
+New step **0c** runs after the existing freshness / adjacent-PR / already-fixed-on-main gates: read the issue's labels, then sample recent closed-not-merged PRs that linked an issue carrying each label. Two or more closures with matching closer-comment shapes ("the team handles bugs marked with `<label>`", "internal-team area / closed in favour of internal work", "cannot accept external PRs for `<label>` issues") = drop and switch to Phase 6.
+
+One closure could be idiosyncratic. Two with matching wording is policy.
+
+Documented case: 2026-05-22, `ChromeDevTools/chrome-devtools-mcp` PRs #2098 + #2099 closed same-day by the same maintainer with effectively identical wording — "difficulty here is not in generating a fix but running evals … team handles bugs marked with the `evals` label." Both PRs passed every other Phase 1 gate. Nothing in CONTRIBUTING or the PR template said so. The cheap query (`gh search prs --repo <r> --state closed "is:unmerged label:<label>"`) would have flagged the policy in one round-trip before clone.
+
+### Added — `contribute-upstream` Phase 8 step 0 catches mid-review competing merges
+
+PRs that sit in review for days are exposed to maintainers landing a competing fix on the same surface. When that happens, the PR is functionally obsolete and the right move is to close it gracefully, not to keep iterating on review comments. Existing Phase 8 jumped straight to fetching review state — if the file moved under us during the gap, classifying feedback against a dead PR was pure waste.
+
+New step **0** in `references/phase-8-review.md` runs before any feedback classification: list commits to `main` on each file the PR touches, since the PR's `createdAt`. Three outcomes — competing fix shipped (close gracefully), file changed but addressing a different bug (rebase), or no movement (proceed to step 1).
+
+Documented case: 2026-05-13 → 2026-05-22, `better-auth/better-auth#9605` (normalize SSO OIDC `?error=signup disabled` → `signup_disabled`) sat 9 days with zero human review. Maintainer landed `#9722` (URL-encode the value → `signup%20disabled`) on 2026-05-22 — different approach, same bug, same file. `#9605` became `mergeable_state: dirty` and functionally obsolete the moment `#9722` landed. The freshness gate at Phase 1 step 0 wouldn't have caught this because the competing PR didn't exist at open time; the Phase 8 review-response loop wouldn't catch it because there was no review to respond to. Step 0 catches the silent-then-obsolete shape.
+
 ## [0.8.0] — 2026-05-22
 
 ### Added — `find-issues --trending [daily|weekly]` for trending-repo discovery

@@ -67,6 +67,27 @@ Do all of the following before touching any code. If any step surfaces a blocker
 
    Motivating cases: `assistant-ui#4009`, `mastra#16383`, and the inverse `drizzle-orm#5755`. See `references/case-studies.md#already-fixed-on-main--wrong-slice-of-the-version-axis-phase-1-step-0b`.
 
+0c. **Label-policy check (BLOCKING).** Some projects enforce invitation-only / internal-team-only conventions **scoped to specific issue labels**, not the whole repo. The prose-based check in step 2 misses these because CONTRIBUTING is silent on them — the convention is enforced by a maintainer closing external PRs with a brief "the team handles this label" comment.
+
+   Read the issue's labels (already in the step 0 `gh issue view` result). For each label, sample recent closed-not-merged PRs that linked an issue carrying that label:
+
+   ```
+   gh search prs --repo <owner>/<repo> --state closed --limit 10 \
+     "is:unmerged label:<label>"
+   # Then for each hit:
+   gh pr view <n> --repo <owner>/<repo> --json closedAt,comments \
+     --jq '{closedAt, closer: (.comments | last | .author.login), msg: (.comments | last | .body | .[0:300])}'
+   ```
+
+   Drop and switch to Phase 6 (issue-only / proposal comment) if **two or more** recent closures on the same label share a closer-comment shape like:
+   - "the team handles bugs marked with the `<label>` label"
+   - "this is an internal-team area / closed in favour of internal work"
+   - "thanks but we cannot accept external PRs for `<label>` issues"
+
+   One closure could be idiosyncratic; two with matching wording is policy.
+
+   Motivating case: `ChromeDevTools/chrome-devtools-mcp` `evals` label. See `references/case-studies.md#label-scoped-invitation-only-convention-phase-1-step-0c`.
+
 1. **Resolve the upstream repo.** From the consumer's `package.json` + lockfile, get the installed version and the `repository` URL. Disambiguate (workspace, fork, mirror) with the user if needed.
 2. **Read the rules of the road.** **Strongly prefer dispatching this to a `general-purpose` subagent** — many file fetches, mostly null results, content dumps that pollute the main context. The subagent returns a compact verdict (≤15 lines) covering: contribution policy (open / discuss-first / invitation-only — HARD STOP if invitation-only), signed-commits requirement, CLA, branch target, changeset usage, packageManager + node version. Pass the upstream `owner/repo` and the issue number for context.
 

@@ -108,3 +108,27 @@ User pushed back, required a cleanup follow-up commit that produced review churn
 **Case:** 2026-05-13 hunt — `mastra-ai/mastra#16514` passed the scout's dup-PR check; PR #16545 ("fix(durable): handle object form of instructions in preparation.ts") opened ~10 minutes later. Caught only when the user explicitly asked "did you check no existing PR?"
 
 **Lesson:** Phase 2/3 scouts may have run minutes ago. On Hot repos, an exact-fix PR can land in that window. Before emitting the ranked list in Phase 4, re-run the dup-PR search against the top-5 candidates in a single batched message. Drop any candidate where a new PR has appeared.
+
+---
+
+## Label-scoped invitation-only convention (Phase 1 step 0c)
+
+**Case:** 2026-05-22, `ChromeDevTools/chrome-devtools-mcp` — two PRs (#2098, #2099) opened against issues carrying the `evals` label (a focused cluster of `evaluate_script` tool-description and CLI-quoting bugs). Both passed every existing Phase 1 gate: contributing policy was open, no invitation-only prose in CONTRIBUTING or the PR template, repo was active with recent merged external PRs, no dup PRs, all CI green, CLA signed. Within hours, the same maintainer (`OrKoN`) closed both with effectively identical wording:
+
+> "the difficulty here is not in generating a fix but running evals to make sure they work. I will close it in favour of the team handling the bugs marked with the 'evals' label."
+
+Two same-day closures with matching language = an enforced policy that is **scoped to the label**, not to the repo or contributor. Nothing in any doc surface said so.
+
+**Lesson:** Invitation-only conventions can be label-scoped. Before clone, sample recent closed-unmerged PRs that linked an issue with the same label as the candidate issue, and look for matching closer-comment shapes. Two closures with the same wording = drop. One closure could be idiosyncratic. The cheap query (`gh search prs --repo <r> --state closed "is:unmerged label:<label>"`) takes one round-trip.
+
+---
+
+## Mid-review competing merge (Phase 8 step 0)
+
+**Case:** 2026-05-13 → 2026-05-22, `better-auth/better-auth#9605`. Opened against issue #9412 ("SSO OIDC callback redirects with `?error=signup disabled` — space-encoded, inconsistent with other auth callbacks"). Fix: normalize the error to underscores (`signup_disabled`) before appending to the redirect URL. Passed every Phase 1 gate at open time.
+
+Sat in review for 9 days with zero human engagement. On 2026-05-22 the maintainer merged a different fix to the same file (`#9722: fix(sso): url-encode error query value in OIDC callback redirect`) — URLSearchParams + URL-encoding (`signup%20disabled`) rather than normalization. Both approaches unblock the symptom; the maintainer chose theirs. `#9605` became `mergeable_state: dirty` and functionally obsolete the moment `#9722` landed.
+
+The freshness gate at Phase 1 step 0 wouldn't have caught this because the competing PR didn't exist at open time. The Phase 8 review-response loop also wouldn't catch it because there was no review to respond to — silence, then obsolescence.
+
+**Lesson:** Before doing anything else in Phase 8 — fetching review state, classifying feedback, or planning a push — list commits to `main` on the same files since the PR was opened. If a competing fix has landed, the right move is to close the PR gracefully with a comment pointing at the merged PR. Continuing to iterate on review comments after the bug is fixed wastes the reviewer's and the user's time.
