@@ -62,9 +62,11 @@ Per-repo subagent prompt skeleton:
 
 ```
 gh search issues --json number,title,labels,assignees,createdAt,updatedAt,url \
-  --query 'repo:<owner>/<repo> state:open (label:"good first issue" OR label:"help wanted" OR label:"bug") sort:updated-desc' \
+  --query 'repo:<owner>/<repo> state:open created:>=<date-7d> (label:"good first issue" OR label:"help wanted" OR label:"bug") sort:created-desc' \
   --limit 30
 ```
+
+(Drop the `created:` filter in `--repo` focus mode, where older reaction-sorted bugs are fair game — the subsystem-stall gate in Phase 3 exists for those.)
 
 Cap the total candidate pool at ~60 across all repos before triage, to keep Phase 3 cheap.
 
@@ -74,38 +76,47 @@ Cap the total candidate pool at ~60 across all repos before triage, to keep Phas
 
 `gh issue view --json` is one round-trip per candidate. For 30 candidates that's 30 round-trips. **Use one GraphQL call instead:**
 
+GitHub has no bulk issues-by-number field — build the query with one aliased `issue(number:)` field per candidate, all sharing a fragment:
+
 ```
-gh api graphql -F owner=<owner> -F repo=<name> \
-  -F numbers='[<n1>,<n2>,...]' -f query='
-  query($owner:String!,$repo:String!,$numbers:[Int!]!){
+gh api graphql -F owner=<owner> -F repo=<name> -f query='
+  query($owner:String!,$repo:String!){
     repository(owner:$owner,name:$repo){
-      issues:nodes:issues(first:50){nodes{
-        number title body createdAt updatedAt
-        assignees(first:5){nodes{login}}
-        labels(first:20){nodes{name}}
-        comments(last:3){nodes{author{login} body createdAt}}
-        closedByPullRequestsReferences(first:5){nodes{number state}}
-        timelineItems(last:10,itemTypes:[CROSS_REFERENCED_EVENT,ASSIGNED_EVENT]){
-          nodes{__typename ... on CrossReferencedEvent{source{__typename ... on PullRequest{number state}}}}
-        }
-      }}
+      i<n1>: issue(number:<n1>){...F}
+      i<n2>: issue(number:<n2>){...F}
+    }
+  }
+  fragment F on Issue {
+    number title body createdAt updatedAt
+    assignees(first:5){nodes{login}}
+    labels(first:20){nodes{name}}
+    comments(last:3){nodes{author{login} body createdAt}}
+    closedByPullRequestsReferences(first:5){nodes{number state}}
+    timelineItems(last:10,itemTypes:[CROSS_REFERENCED_EVENT,CONNECTED_EVENT,ASSIGNED_EVENT]){
+      nodes{__typename
+        ... on CrossReferencedEvent{source{__typename ... on PullRequest{number state title createdAt}}}
+        ... on ConnectedEvent{subject{__typename ... on PullRequest{number state title}}}}
     }
   }'
 ```
 
-(Alias each candidate via `node(id:...)` if GitHub's bulk-by-number is unavailable in your CLI version — the point is **one round-trip, not N**.)
+**Tolerate partial errors.** A number that resolves to a PR (or nothing) returns `null` for that alias plus an `errors` entry, and `gh` exits non-zero — but `data` for the other aliases still comes back on stdout. Parse the output regardless of exit code; treat the batch as failed only if `data` itself is absent. The point is **one round-trip, not N**.
 
-**Fallback** if GraphQL is unavailable: dispatch the per-issue `gh issue view --json` calls **in a single message**, one Bash tool call per candidate, batched in parallel. Not sequentially.
+**Fallback** if GraphQL is unavailable: dispatch the per-issue calls **in a single message**, one Bash tool call per candidate, batched in parallel. Not sequentially. `gh issue view --json` has **no `timelineItems` field** — pair it with the REST timeline endpoint to get the cross-referenced PRs:
 
 ```
 gh issue view <n> --repo <owner>/<repo> --json \
-  assignees,labels,comments,closedByPullRequestsReferences,timelineItems,body,createdAt,updatedAt
+  assignees,labels,comments,closedByPullRequestsReferences,body,createdAt,updatedAt
+gh api repos/<owner>/<repo>/issues/<n>/timeline --jq \
+  '[.[] | select(.event=="cross-referenced" and .source.issue.pull_request)
+    | {number:.source.issue.number, state:.source.issue.state,
+       merged:(.source.issue.pull_request.merged_at!=null), title:.source.issue.title}]'
 ```
 
 Drop the candidate if **any** of these is true:
 
 - It has an assignee.
-- `closedByPullRequestsReferences` is non-empty (a PR is already linked).
+- `closedByPullRequestsReferences` is non-empty, OR the enrichment `timelineItems` shows a cross-referenced/connected PR that is **open or merged**. (`closedByPullRequestsReferences` lists only PRs that *closed* the issue, so a dup that didn't auto-close it hides from that field but shows in the timeline.) A **closed-not-merged** cross-ref does not auto-drop — route it through the triage in "Duplicate-PR search" below, which decides.
 - An open PR for the same fix exists (see "Duplicate-PR search" below).
 - The most recent maintainer comment says "we're working on this" / "PR incoming".
 - It's labelled `needs: info`, `wontfix`, `discussion`, `rfc`, or similar non-actionable.
@@ -122,21 +133,33 @@ Issue-title keywords miss PRs whose title describes the *implementation* rather 
 
 **Dispatch all token queries in parallel.** Send ONE message containing one Bash tool call per token type — not 4–5 sequential calls. Inspect all results together and short-circuit if any returns a PR hit.
 
-The four token types per candidate:
+**The issue's own timeline is the authoritative cross-reference** — it catches a PR whose title shares no tokens with the issue (anything that says "fixes #N" or is manually linked), in any state. You already have it from the Phase 3 enrichment `timelineItems` — don't re-query it here, just act on it. The token searches below are the *second* net, for PRs that fix the bug without referencing the issue at all:
 
-1. **The issue number itself.** `"#93700"` and bare `"93700"` — many PR descriptions reference it.
+1. **The issue number itself.** `"#93700"` and bare `"93700"` — many PR descriptions reference it. **This query is mandatory on every candidate, including the Phase-4 re-check — never substitute code-identifier tokens for it.**
 2. **URL-encoded or other distinctive literals** in the issue body — `%5F`, error codes, magic strings.
 3. **Backticked code identifiers** from the issue body — function names, file paths, type names (e.g. `` `LayoutRoutes` ``, `` `buildUpdateSet` ``). Also include: import paths, augmented-module names from `declare module 'X' { ... }` blocks, and interface names being augmented (e.g. `Register`, `Routes`). Module-augmentation bugs are paraphrased away by title-keyword search.
 4. **Error message fragments** quoted in the body, if any.
 
-Each query: `gh search prs --repo <owner>/<repo> --state open --limit 5 <token>`.
+**Search ALL states, not just open** — `gh search prs --repo <owner>/<repo> --limit 5 <token>` (no `--state` filter; add `--json number,title,state,createdAt` to read state). A `--state open`-only search is the bug that shipped a dead candidate: it silently skips a closed-not-merged PR for the exact fix, which is a louder signal than an open one (see below).
 
 A title-keyword search alone is not enough. Documented failure cases:
 
 - Issue titled "Layouts for paths that start with underscore (%5F)…" had an open PR titled "fix(typegen): normalize %5F to _…" — caught only by the `%5F` token search.
 - `TanStack/router#7399` ("server entry boilerplate gives type error") had open PR `#7357` ("fix(start): import Register from framework package so module augmentation works"). Token search using title-paraphrases `server,boilerplate` returned nothing; the dup was caught only when the body tokens `createServerEntry`, `Register`, `requestContext` were tried.
 
-If any PR query hits, drop the candidate.
+**Interpreting a non-open hit.** `gh search prs --json state` returns `merged` as a distinct state, so merged vs. closed-not-merged is readable straight from the search results:
+
+- **Merged** → the fix already shipped; the issue just didn't auto-close (no "fixes #N" keyword in the PR body). Drop.
+
+If the PR is closed-and-unmerged, do NOT silently treat the issue as ripe — inspect *why* it closed with `gh pr view <pr> --repo <o>/<r> --json state,mergedAt,author,closedAt,comments,reviews,labels`:
+
+- **Approach rejected by a maintainer** (review comment explaining a different design, or "we don't want this") → the issue is design-sensitive; demote to issue-comment-only or drop. A fresh PR with the same approach will be rejected too.
+- **Auto-closed by an anti-AI-PR bot.** A bot/`github-actions` comment like *"labeled `maybe automated` because it appears to have been fully generated by AI"* or any "confirm you are a real human / disclose if automated" gate means the repo **auto-kills AI-generated PRs**. This is an anti-agent policy (same family as immich/transformers/playwright) — it is **near-fatal for this flow regardless of issue ripeness**. Drop the candidate AND surface the *repo* as a skip-list addition (anti-AI-PR auto-close). The issue may still be technically ripe for a human, but not for a Claude-driven PR.
+- **Abandoned by author** (closed with no review, no bot, often by the author themselves) → genuinely re-openable; the issue can stay a candidate, but say so explicitly in the why-line so the user knows a prior attempt exists.
+
+Documented failure case: 2026-06-09 trending hunt ranked `vitest-dev/vitest#10491` (negated `--project` filters) as the #1 pick. A `--state open` dup-search and a code-identifier-token re-check both missed PR **#10492** — opened and **auto-closed within ~2h** after vitest's bot labeled it `maybe automated` ("appears to have been fully generated by AI"). Caught only when the user asked "did someone already do this?" Two lessons: search all states (the dup was *closed*), and act on the enrichment timeline's cross-referenced PRs even when `closedByPullRequestsReferences` is empty. Bonus: vitest belongs on the skip list (anti-AI-PR auto-close bot).
+
+If a token query or the timeline returns an open or merged PR, or a closed-not-merged PR that falls in the "rejected" or "anti-AI-bot" buckets above, drop the candidate.
 
 For each survivor, score on:
 
@@ -209,7 +232,7 @@ Before running the per-repo gate batch, check budget once: `gh api rate_limit --
 
 ## Phase 4 — Output
 
-**Pre-output freshness re-check (BLOCKING).** Scout subagents may have run minutes ago and a PR can land in that window — your shortlist goes stale. Before emitting the ranked list, re-run the Phase 3 duplicate-PR search against the top-5 candidates in a single batched message, plus `gh issue view <n> --json closedByPullRequestsReferences,assignees,state`. Drop any candidate where a new PR has appeared. Documented failure: 2026-05-13 hunt — `mastra-ai/mastra#16514` passed the scout's dup-PR check; PR #16545 opened ~10 minutes later. Caught only when the user explicitly asked "did you check no existing PR?"
+**Pre-output freshness re-check (BLOCKING).** Scout subagents may have run minutes ago and a PR can land in that window — your shortlist goes stale. Before emitting the ranked list, run in a single batched message: (1) per top candidate, the issue-number token search **across all states** (`gh search prs --repo <o>/<r> --limit 5 "<n>" --json number,title,state` — the mandatory token from Phase 3, NOT a code-identifier paraphrase); (2) one Phase-3 enrichment GraphQL call covering all top candidates — it re-fetches assignees, state, `closedByPullRequestsReferences`, AND the timeline cross-refs that catch a closed-unmerged dup. (`gh issue view --json` has no `timelineItems` field — use the GraphQL, or the REST timeline fallback from Phase 3.) Drop any candidate where a new open PR appeared, or where a closed-not-merged PR falls in the "rejected"/"anti-AI-bot" buckets. Documented failures: 2026-05-13 — `mastra-ai/mastra#16514` passed the scout's dup-PR check; PR #16545 opened ~10 minutes later. 2026-06-09 — `vitest-dev/vitest#10491` shipped as the #1 pick because the re-check used a code-identifier token (`matchesProjectFilter`) under `--state open` and missed already-closed AI-PR #10492; the issue-number/all-states/timeline check would have caught it. Both surfaced only when the user asked "did someone already do this?"
 
 Show the top 5 as a compact ranked list:
 
