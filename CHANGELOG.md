@@ -32,6 +32,8 @@ Design notes, all verified against the live `gh` CLI before shipping:
 - Issues already covered by your own linked PR collapse into one row instead of double-counting.
 - Nudge policy: at most one per item per 14 days, and none at all if your own last comment was already a nudge — offer close/escalate/walk-away instead.
 
+An approved-but-conflicted PR is now its own case rather than a rebase candidate. Repos that dismiss stale approvals on push turn a no-op rebase into a lost review, and the setting is not readable without admin rights (`branches/<base>/protection` 404s for outside contributors), so `follow-up` assumes it is on and surfaces the trade instead of acting. Learned by doing it wrong: `better-auth/better-auth#10266` went `CONFLICTING` → `MERGEABLE` and lost a human `APPROVED` in the same push.
+
 First live run (2026-08-01, 12 open PRs + 3 open issues) validated two rules the hard way. **All four** PRs that returned `mergeable: UNKNOWN` came back `CONFLICTING`/`DIRTY` on the mandated re-query — without it, a third of the pipeline reads as fine. And on `elie222/inbox-zero#2662` the only non-you comment in 79 days was `CLAassistant` (a `User`, not a `Bot`), so an unfiltered "someone replied, go answer them" would have been about a CLA badge. Conversely `mastra-platform`'s automated `APPROVED` on `mastra-ai/mastra#16639` *does* report `Bot` and is correctly filtered — that PR is approved by a robot and blocked on a required E2E job, not ready to merge.
 
 ### Added — `contribute-upstream` refuses to fix code nothing calls (Phase 3 step 4) and stops taking drive-by issues on faith (Phase 1 step 5b)

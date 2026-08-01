@@ -144,7 +144,7 @@ Order of evaluation matters — first match wins.
 1. **At risk — deadline running.** A stale-bot warning comment or a `stale` / `no-response` / `pending-close` label with an auto-close deadline. Surface at the top regardless of everything else; these die from silence.
 2. **Superseded.** A timeline cross-ref to a *merged* PR by someone else covering your surface, or (for issues) `closedByPullRequestsReferences` / a merged linked PR. Your work is probably dead — the move is close-with-thanks or rebase-and-narrow, not another review round. Same shape as `contribute-upstream` Phase 8 step 0; reuse its per-file commit check before you conclude it.
 3. **Changes requested.** `reviewDecision == CHANGES_REQUESTED`, or a human review/comment with actionable feedback that postdates `lastYou`. → `contribute-upstream` Phase 8.
-4. **Blocked by merge state.** `DIRTY` / `BEHIND` / `BLOCKED`-with-required-failure, per the table above.
+4. **Blocked by merge state.** `DIRTY` / `BEHIND` / `BLOCKED`-with-required-failure, per the table above. If the item also carries a live human `APPROVED`, label it as such — the rebase that clears the conflict is likely to dismiss the approval (see Phase 6).
 5. **Question awaiting your answer** (mostly issues). `lastHuman > lastYou` and the comment asks something, or the item carries `needs-info` / `awaiting-response` / `needs-repro`. A maintainer asking for a version number and getting silence is the most common way a good issue dies.
 6. **Your draft, gone cold.** `isDraft` and no activity from you in the stale window.
 7. **Waiting on them, stale.** No human non-you activity for longer than the stale window (default 14d). Nudge candidate.
@@ -190,10 +190,16 @@ Only after the user picks an item. Never batch-apply across items.
 | Bucket | Handoff |
 |---|---|
 | Changes requested | `contribute-upstream` Phase 8 (`references/phase-8-review.md`) — it owns classify → apply → reply → re-request |
-| Conflicts / behind | `contribute-upstream` Phase 8, which runs the competing-merge re-check before any rebase |
+| Conflicts / behind | `contribute-upstream` Phase 8, which runs the competing-merge re-check before any rebase. **Check for a live approval first** — see below |
 | Superseded | Draft a close comment thanking the maintainer and pointing at the merged PR. Show it. `gh pr close` only on explicit yes |
 | Stale, nudge | Draft a ≤3-line comment: what's blocked, what you need, an offer to close if it's not wanted. Show it. `gh pr comment` only on explicit yes |
 | Question awaiting you | Draft the answer from what's in the repo. Show it. Post only on explicit yes |
+
+**A live human approval outranks the conflict. Never rebase past it unprompted.** Repos with "dismiss stale approvals on push" turn *any* push — including a pure rebase that changes no code — into a dismissal, and the PR goes back to the end of the review queue.
+
+You generally cannot check this in advance. `gh api repos/<owner>/<repo>/branches/<base>/protection` 404s for anyone without admin rights (verified against `better-auth/better-auth`, which has the setting on), and sampling other PRs for `DISMISSED` reviews under-reports — a PR that was never pushed to after approval shows nothing either way. So treat the setting as **on unless proven otherwise**.
+
+Which makes the rule procedural rather than diagnostic: when an item is both `CONFLICTING` and carries a human `APPROVED`, do not fold it into the "just rebase it" bucket. Surface the trade — rebase and re-request review, or leave it and ask the maintainer whether they'd rather resolve it — and let the user pick. `contribute-upstream`'s Phase 8 "no mid-review rebase" rule exists for exactly this. Documented case: `better-auth/better-auth#10266`, rebased 2026-08-01 to clear a lockfile conflict; went `CONFLICTING` → `MERGEABLE` and lost its approval in the same push.
 
 **Nudge policy.** At most one nudge per item per 14 days, and if your own last comment *was* a nudge, don't offer another — offer the alternatives instead (close it, raise it in the issue, walk away). A second unanswered ping reads as pressure and costs you the next PR's goodwill.
 
