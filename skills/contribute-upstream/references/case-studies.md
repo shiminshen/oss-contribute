@@ -132,3 +132,22 @@ Sat in review for 9 days with zero human engagement. On 2026-05-22 the maintaine
 The freshness gate at Phase 1 step 0 wouldn't have caught this because the competing PR didn't exist at open time. The Phase 8 review-response loop also wouldn't catch it because there was no review to respond to — silence, then obsolescence.
 
 **Lesson:** Before doing anything else in Phase 8 — fetching review state, classifying feedback, or planning a push — list commits to `main` on the same files since the PR was opened. If a competing fix has landed, the right move is to close the PR gracefully with a comment pointing at the merged PR. Continuing to iterate on review comments after the bug is fixed wastes the reviewer's and the user's time.
+
+---
+
+## Dead target — fixing code nothing calls (Phase 1 step 5b + Phase 3 step 4)
+
+**Case:** 2026-05-15 → 2026-08-01, `CopilotKit/CopilotKit#4842`. Opened against issue #4772 ("retry-utils.ts — Retry-After > 60s throws instead of surfacing STOP condition"). The fix added a typed `RetryAfterExceededError` to `packages/runtime/src/lib/runtime/retry-utils.ts` so callers could discriminate on `instanceof` instead of parsing a message string, with tests. Every existing Phase 1 gate passed: open contributing policy, no dup PR, CLA fine, active repo, and the fix matched the issue's stated request exactly.
+
+68 days later the maintainer requested changes and led with the fundamental problem:
+
+> "**The code path has no consumers.** `fetchWithRetry` (and the whole `retry-utils` module) is orphaned — `git grep` across the monorepo finds it referenced *only* by its own test file… Until the retry utility is actually integrated, this is polishing dead code."
+
+Verified after the fact: a repo-wide code search for `fetchWithRetry` returns three hits — the module, its test, and an unrelated Go docs page. The maintainer explicitly called the patch itself "clean and well-tested". The code was never the problem; the *target* was.
+
+Two compounding misses in the same PR:
+
+- **A `.changeset/` file was added to a repo that no longer uses changesets.** `.changeset/` is 404 on `main` (they moved to conventional-commit releases), so the PR carried a file that could not merge. Phase 1 reads `.changeset/config.json` — a 404 there is a signal to *stop* adding changesets, not a lookup that silently failed.
+- **The issue's cited path did not exist.** #4772 pointed at `packages/runtime/src/util/retry-utils.ts`; that path 404s. The real file lives under `src/lib/runtime/`. The issue was filed by an author with exactly one issue each across a dozen unrelated repos (`helicone`, `crawlee`, `cline`, `dust`, `voltagent`, …), with body boilerplate reading "Corpus reference:" and "Related pattern:" — a bulk automated scan, not a user who hit the bug.
+
+**Lesson:** An issue describing a real defect in a real file is not evidence that fixing it changes anything. Before writing the fix, prove the symbol is reachable from something a user runs: `git grep -n '<symbol>' -- . ':!*test*' ':!*spec*'`. Definition + own tests only = orphaned; switch to Phase 6 and ask whether the module is meant to be wired in. And when the issue came from someone who didn't hit the bug themselves, treat every premise in it — file path included — as unverified until you check it. Cost of the missing check: one `git grep` versus 68 days of a reviewer's queue and a closed PR.

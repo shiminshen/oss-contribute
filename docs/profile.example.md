@@ -1,6 +1,6 @@
 # oss-contribute profile
 
-This is an example of the shared profile that `find-issues`, `contribute-upstream`, and `profile` all read from. Copy it to your active profile location (see below) and edit.
+This is an example of the shared profile that every skill in the plugin (`find-issues`, `contribute-upstream`, `follow-up`, `log`, `profile`) reads from. Copy it to your active profile location (see below) and edit.
 
 **Profile location** (resolved in this order, first existing wins):
 
@@ -39,6 +39,11 @@ Used to set repo-local `git config user.name` / `user.email` after each `git clo
 
 ## Default budget
 1h
+
+## Follow-up
+Optional — only read by `follow-up`. Omit the section to take the defaults.
+- stale window: 14d
+- ignore comment authors: vercel, coderabbitai, superagent-security
 
 ## What "ripe" means to me
 Small diff (<50 lines). Clear repro in the issue body. No assignee. No linked PR.

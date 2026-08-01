@@ -143,4 +143,4 @@ Do **not** open the file, post it anywhere, or `git add` it. This is a local art
 - **You want a journal of every contribution attempt, including bails.** Out of scope — the rejected-`pipeline` reasoning in the README applies. Append a one-liner to `CONTRIBUTIONS.md` in the consumer repo instead.
 - **You want to *find* something to contribute to.** Use `/oss-contribute:find-issues`.
 - **You want to *ship* an upstream fix.** Use `/oss-contribute:contribute-upstream`.
-- **You want a status of *open* PRs (not merged).** Out of scope — `gh search prs --author @me --state open` is one line, no skill needed (see README "Checking your pipeline").
+- **You want a status of *open* PRs (not merged).** Use `/oss-contribute:follow-up` — it triages open PRs and issues by who owes the next move.

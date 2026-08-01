@@ -6,24 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A **Claude Code plugin** — pure markdown, no build system, no runtime. Everything ships as `SKILL.md` files loaded by Claude Code at invoke time. There is nothing to compile, test, or lint. "Shipping" means editing markdown, bumping versions in two JSON files, and writing a CHANGELOG entry.
 
-The plugin name is `oss-contribute`. It exposes three user-invocable skills under that namespace: `find-issues`, `contribute-upstream`, and `profile`.
+The plugin name is `oss-contribute`. It exposes five user-invocable skills under that namespace: `find-issues`, `contribute-upstream`, `follow-up`, `log`, and `profile`.
 
 ## Repository layout (the parts that matter)
 
 - `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` — plugin manifest + marketplace entry. **Both contain a `version` field that must stay in sync** when releasing.
 - `skills/<name>/SKILL.md` — one skill per directory. The YAML frontmatter (`name`, `description`, `trigger`) is what Claude Code reads to register the skill; the body is what gets injected into context when the skill is invoked.
 - `skills/contribute-upstream/references/*.md` — auxiliary files loaded on-demand by the skill, **not** on-invoke. This split exists to keep the on-invoke token cost down (see "Token budget" below).
-- `docs/profile.example.md` — example of the shared user profile that all three skills read from.
+- `docs/profile.example.md` — example of the shared user profile that all skills read from.
 - `CHANGELOG.md` — Keep-a-Changelog format, semver. Every behavioural change to a skill gets an entry.
 
 There is no `package.json`, no `node_modules`, no test runner. Don't add one without explicit reason.
 
-## How the three skills relate
+## How the skills relate
 
-All three skills read from one shared profile file resolved in this order (first existing wins): `$CLAUDE_PLUGIN_DATA/profile.md` → `~/.claude/plugins/data/oss-contribute/profile.md` → `~/.claude/skills/oss-contribute/profile.md`. The profile is the single source of truth for stable preferences (watched repos, languages, default GitHub account, default budget). Per-invocation args override the profile but never mutate it.
+All skills read from one shared profile file resolved in this order (first existing wins): `$CLAUDE_PLUGIN_DATA/profile.md` → `~/.claude/plugins/data/oss-contribute/profile.md` → `~/.claude/skills/oss-contribute/profile.md`. The profile is the single source of truth for stable preferences (watched repos, languages, default GitHub account, default budget). Per-invocation args override the profile but never mutate it.
 
 - `find-issues` is **read-only**, proactive. Searches watched repos and ranks candidates. Hands off to `contribute-upstream` when the user picks one — never auto-invokes.
 - `contribute-upstream` is the heavy one — 8 phases from "I hit a bug in this package" to a merged PR, plus escape hatches (issue-only, propose-comment) and a Phase 8 review-response loop.
+- `follow-up` is **read-only** through its report phase. Triages everything the user has open upstream (authored PRs + issues) into ball-with-you vs ball-with-them, then hands the actionable ones to `contribute-upstream` Phase 8. Writes (nudge comment, close comment) are per-item and confirmation-gated.
+- `log` renders merged PRs into a portfolio artifact. Read-only; local file or stdout, never publishes.
 - `profile` is just the view/edit surface for the shared file.
 
 Procedures duplicated across skills have **one authoritative home** (usually inside `contribute-upstream`) and the other skill defers via a one-line pointer. When editing a procedure, find the canonical version first — don't fork.

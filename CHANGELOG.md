@@ -12,6 +12,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `do` / `guide` / `adaptive` operating modes (per-session, persisted)
 - Per-repo conventions cache to speed up repeat contributions
 
+## [0.11.0] — 2026-08-01
+
+### Added — `follow-up`, a fifth skill: what of everything I opened is waiting on me?
+
+`/oss-contribute:follow-up` lists every PR and issue you have open upstream and sorts them by who owes the next move — changes requested, required checks red, conflicts, an unanswered maintainer question, a stale-bot deadline, work superseded by someone else's merge — then hands the actionable ones to `contribute-upstream` Phase 8. Read-only through the report; nudge and close comments are drafted for review and never posted without a per-item yes.
+
+This **reverses the "considered and rejected" `pipeline` entry** in the README, which claimed `gh search prs --author @me` already covered it. Two things it didn't:
+
+- **The recommended one-liner was broken.** README's "Checking your pipeline" snippet asked for `--json url,title,repository,reviewDecision,updatedAt`, and `gh search prs` has no `reviewDecision` field (nor `mergeable`, `statusCheckRollup`, or `mergedAt`) — it exits with `Unknown JSON field`. The state you actually want is only reachable through a second enrichment pass, so the "just use gh" position was resting on a command that never ran.
+- **Bot noise makes the obvious signals useless.** On a real upstream PR the last commenter is nearly always a deploy-preview bot, CodeRabbit, a coverage bot or a security scanner, so both "last commenter isn't me" and `updatedAt` mis-report ball ownership. `mastra-ai/mastra#16639` reads as *updated today* off an automated platform approval while the last human word was weeks earlier, and shows four "failing" checks of which two are docs previews on an already-approved PR. The insight is in the noise filter, not the listing — which is what makes it skill-shaped rather than alias-shaped.
+
+Design notes, all verified against the live `gh` CLI before shipping:
+
+- **Bot detection needs a name list, not just `__typename`.** App-backed accounts (`dane-ai-mastra`, `superagent-security`) come back as `User`, not `Bot`, so `__typename` alone under-filters. The skill combines `__typename` / `[bot]` suffix / a profile-configurable ignore list / bot-template body shapes, and computes staleness from human events only.
+- **`mergeStateStatus` is the authority, `statusCheckRollup` over-reports.** `DIRTY`/`BEHIND`/`BLOCKED`-with-required-failure is yours; `UNSTABLE` (non-required checks only) and `BLOCKED`-with-green-checks (waiting on review) are theirs. `mergeable` returns `UNKNOWN` on first ask because GitHub computes it lazily — the skill re-queries and reports "unknown" rather than "clean".
+- **One batched GraphQL for enrichment**, aliased `repository { pullRequest(number:) }` per item sharing a fragment — the same shape `find-issues` Phase 3 uses — instead of N `gh pr view` round-trips.
+- **Explicit `--author <login>`, never bare `@me`**, and no `gh auth switch` at all for the read-only phases: `@me` resolves against the active account and silently reports the wrong person's pipeline on a two-account machine.
+- Issues already covered by your own linked PR collapse into one row instead of double-counting.
+- Nudge policy: at most one per item per 14 days, and none at all if your own last comment was already a nudge — offer close/escalate/walk-away instead.
+
+First live run (2026-08-01, 12 open PRs + 3 open issues) validated two rules the hard way. **All four** PRs that returned `mergeable: UNKNOWN` came back `CONFLICTING`/`DIRTY` on the mandated re-query — without it, a third of the pipeline reads as fine. And on `elie222/inbox-zero#2662` the only non-you comment in 79 days was `CLAassistant` (a `User`, not a `Bot`), so an unfiltered "someone replied, go answer them" would have been about a CLA badge. Conversely `mastra-platform`'s automated `APPROVED` on `mastra-ai/mastra#16639` *does* report `Bot` and is correctly filtered — that PR is approved by a robot and blocked on a required E2E job, not ready to merge.
+
+### Added — `contribute-upstream` refuses to fix code nothing calls (Phase 3 step 4) and stops taking drive-by issues on faith (Phase 1 step 5b)
+
+The tractability gate caught re-implementations and half-fixes but had no notion of *reachability*: a clean, well-tested patch to an orphaned module passed every gate the skill had. New third failure mode — **dead target** — requires proving the symbol is reachable from something a user runs (`git grep -n '<symbol>' -- . ':!*test*' ':!*spec*'`, or a repo code search pre-clone) before the fix is written. Definition plus its own tests only = switch to Phase 6 and ask whether the module is meant to be wired in.
+
+New Phase 1 step 5b handles the upstream cause, for bugs that come from an issue the user didn't file: confirm the path the issue cites actually exists (a 404 means the issue was written against a different tree), and check whether the filer has exactly one issue each across a dozen unrelated repos with "Corpus reference:"-style boilerplate — a bulk automated scan whose premises are unverified by construction. Neither is a hard stop; both change how much of the issue you take on faith.
+
+Documented case: `CopilotKit/CopilotKit#4842` sat 68 days before the maintainer replied that `fetchWithRetry` and its whole module are referenced only by their own test file — "until the retry utility is actually integrated, this is polishing dead code" — while calling the patch itself "clean and well-tested". The code was never the problem; the target was. The same PR also added a `.changeset/` file to a repo that had moved off changesets (`.changeset/` 404s on `main`), and the issue driving it cited `packages/runtime/src/util/retry-utils.ts`, a path that does not exist. Cost of the missing check: one `git grep`.
+
+### Fixed — README's pipeline one-liner and stale skill counts
+
+The broken `reviewDecision` snippet is replaced with a form that runs (`--json number,repository,title,updatedAt` + template; `--template` also requires `--json`, which the old snippet did satisfy). `CLAUDE.md`, `docs/profile.example.md`, and the install-verification note still said "three skills" after `log` shipped in v0.7.0; they now cover all five.
+
 ## [0.10.0] — 2026-06-09
 
 ### Fixed — `find-issues` duplicate-PR search now covers closed PRs and acts on the issue timeline it already fetches

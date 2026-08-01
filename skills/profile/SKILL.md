@@ -74,6 +74,11 @@ shiminshen
 ## Default budget
 1h
 
+## Follow-up
+(optional — `follow-up` only; omit for defaults)
+- stale window: 14d
+- ignore comment authors: vercel, coderabbitai
+
 ## What "ripe" means to me
 Small diff (<50 lines). Clear repro in the issue body. No assignee. No linked PR.
 Maintainer has triaged (has a label). Repo has merged something in the last 30 days.

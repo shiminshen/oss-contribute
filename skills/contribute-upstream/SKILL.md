@@ -122,6 +122,13 @@ Do all of the following before touching any code. If any step surfaces a blocker
    - Open issue **with a linked open PR** → tell the user; offer to review/test that PR, not compete with it.
    - Open PR found via `gh search prs` for the same fix → same: review/test, don't compete.
    - Closed PR → read why; that reason (scope, design objection, maintainer pushback) often blocks the same fix even if the bug is real. `find-issues`'s Phase 3 "Duplicate-PR search" has a fuller merged/rejected/anti-AI-bot/abandoned breakdown of this same signal — reuse that triage rather than re-deriving it here.
+5b. **Issue-hygiene check (cheap, pre-clone).** When the bug comes from an issue you didn't file, verify the issue's own claims before trusting its framing. Two one-call checks:
+
+   - **Does the cited path exist?** `gh api repos/<owner>/<repo>/contents/<path-from-issue> --jq .path`. A 404 means the issue was written against a different tree — stale, a fork, or fabricated. Find the real file before believing anything else in the body.
+   - **Is the filer drive-by?** `gh search issues --author <filer> --limit 30 --json repository` — one issue each across a dozen unrelated repos, plus body boilerplate like "Corpus reference:" / "Related pattern:", means a bulk automated scan, not someone who hit the bug. Their premises are unverified by construction; the reachability check in Phase 3 step 4 becomes mandatory, and the value of the fix is whatever *you* can independently establish.
+
+   Neither is a hard stop. Both change how much of the issue you take on faith. Motivating case: CopilotKit#4842. See `references/case-studies.md#dead-target-fixing-code-nothing-calls-phase-1-step-5b--phase-3-step-4`.
+
 6. **CLA check.** Look for `.github/cla.yml`, `cla-assistant`, or a CLA note in CONTRIBUTING. Surface CLA requirements before any code work.
 7. **Pick the GitHub account AND the git commit identity (must match).** Read the shared profile's `## Default GitHub account` AND `## Git commit identity` (the `name:` and `email:` lines). **Use both without re-prompting** — even when `gh auth status` shows multiple accounts logged in. The profile entries are the user's standing instructions; re-asking on every contribution treats stable preferences as ephemeral and creates friction. State the chosen account + name + email once in the Phase 1 step 8 summary so they're visible, but do not put them behind questions. The user will override per-invocation if they want a different identity ("use the company account this time"); otherwise honour the profile.
 
@@ -167,7 +174,8 @@ This is the hardest step. In order:
 1. **Adapt the upstream's existing tests.** Find the test file closest to the affected code and add a failing case that mirrors the consumer-side symptom — using the conventions captured in step 0.
 2. **Use the project's test harness** — do not invent a custom setup.
 3. **Bail out** if the bug depends on consumer-stack specifics the upstream can't reproduce (specific framework version, DB driver, env-specific behaviour). Switch to Phase 6 (issue-only).
-4. **Tractability gate (BLOCKING).** Before writing the fix, ask: *is the fix scope what the issue framing suggested?* Two failure modes to catch:
+4. **Tractability gate (BLOCKING).** Before writing the fix, ask: *is the fix scope what the issue framing suggested?* Three failure modes to catch:
+   - **Dead target — the code path has nothing calling it.** Before writing the fix, prove the function you're about to change is reachable from something a user runs. `git grep -n '<symbol>' -- . ':!*test*' ':!*spec*'` in the clone (or `gh api "search/code?q=<symbol>+repo:<owner>/<repo>"` pre-clone). If every hit is the definition and its own tests, the module is orphaned: the fix is unobservable in production, and no amount of test coverage changes that. Switch to Phase 6 and say so — "this module has no consumers; is it meant to be wired in?" is a useful question and a useless PR. A clean, well-tested patch to dead code still gets closed. Motivating case: CopilotKit#4842. See `references/case-studies.md#dead-target-fixing-code-nothing-calls-phase-1-step-5b--phase-3-step-4`.
    - **Feature gone, not bug.** The issue says "X is missing/broken in version Y" but X is wholly absent from the new code paths. The "fix" would be a re-implementation, not a bug fix — switch to Phase 6 with analysis: "feature X is absent — intentional or oversight?" Motivating case: `drizzle-orm#5755`. See `references/case-studies.md#tractability-gate--feature-gone-not-bug-phase-3-step-4`.
    - **Half-fix risk.** The minimal fix (e.g. one type addition) makes TS stop erroring but leaves runtime semantics broken. Don't ship half-fixes — they hide the bug from users. Either fix both or switch to Phase 6.
 
@@ -249,7 +257,7 @@ Leave a TODO in the consumer repo noting the upstream PR number so the patch can
 
 After the PR is open, this phase handles the round-trip until merge or close.
 
-**Trigger** when `gh pr view <n> --json reviews,comments,reviewRequests` shows new activity since last check, or the user invokes `/oss-contribute:contribute-upstream` with the PR URL/number after it's open.
+**Trigger** when `gh pr view <n> --json reviews,comments,reviewRequests` shows new activity since last check, the user invokes `/oss-contribute:contribute-upstream` with the PR URL/number after it's open, or `/oss-contribute:follow-up` hands off a PR it bucketed as changes-requested / conflicted / behind.
 
 **Procedure:** Load `references/phase-8-review.md`. It contains the 7-step procedure (fetch → classify into apply/push-back/clarify/out-of-scope → summarise to user → apply approved → push to fork → reply on threads → re-request review) and 4 hard rules (no silent re-pushing, no mid-review rebase, no force-push unless asked, escalate when feedback conflicts with Phase 1 hard rules).
 

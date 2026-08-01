@@ -10,6 +10,7 @@ Most "contribute to OSS" tools assume you're shopping for something to work on. 
 |---|---|---|
 | `find-issues` | `/oss-contribute:find-issues` | **Proactive** — ranked shortlist of ripe issues across your watched repos. Read-only; hands off to `contribute-upstream`. |
 | `contribute-upstream` | `/oss-contribute:contribute-upstream <pkg>` | **Reactive** — 8 phases from "I hit a bug in this package" to a merged PR. Pre-flight gate, repro bridge, fix, PR with confirmation gate, local-patch handoff, review response. |
+| `follow-up` | `/oss-contribute:follow-up` | **Triage** — everything you have open upstream (PRs + issues), split into "ball is with you" vs "ball is with them". Read-only; hands off to `contribute-upstream` Phase 8. |
 | `log` | `/oss-contribute:log` | **Portfolio** — render your merged upstream PRs (default last 90 days) as a hybrid table + detail-block artifact. Read-only; writes a local file or stdout. |
 | `profile` | `/oss-contribute:profile` | View/edit the shared preferences file used by every skill. |
 
@@ -40,7 +41,7 @@ No `npm install` or build step — the plugin is plain markdown.
 /oss-contribute:profile
 ```
 
-Expected output: `No profile found. … Run: /oss-contribute:profile edit to set one up.` That message means the three skills loaded correctly under the `oss-contribute:` namespace.
+Expected output: `No profile found. … Run: /oss-contribute:profile edit to set one up.` That message means the skills loaded correctly under the `oss-contribute:` namespace.
 
 ### First-run setup
 
@@ -118,19 +119,23 @@ The differentiator isn't volume of features — it's that **oss-contribute is in
 
 ## Checking your pipeline
 
-No skill for this — there's no value beyond what `gh` already gives you. The one-liner:
-
-```bash
-# Open PRs, with review state and last activity
-gh search prs --author @me --state open \
-  --json url,title,repository,reviewDecision,updatedAt \
-  --template '{{range .}}{{.repository.nameWithOwner}}#{{.number}}  {{.reviewDecision}}  {{timeago .updatedAt}}  {{.title}}{{"\n"}}{{end}}'
-
-# Merged in last 90 days (receipts)
-gh search prs --author @me --merged --merged-at ">=$(date -v-90d +%Y-%m-%d)"
+```
+/oss-contribute:follow-up
 ```
 
-`reviewDecision: CHANGES_REQUESTED` is the signal to re-enter `contribute-upstream` Phase 8 on that PR. If you find yourself running this often enough to want a skill, that's the signal to revisit the Roadmap below — until then, GitHub notifications + this command are enough.
+Lists every PR and issue you have open upstream, split into **ball is with you** (changes requested, required checks red, conflicts, a maintainer question you never answered, a stale-bot deadline running) and **ball is with them** (waiting on review, with a nudge candidate flagged after 14 quiet days), plus what merged or closed since last time.
+
+The value over raw `gh` is the noise filter. `gh search prs --json` exposes neither `reviewDecision` nor `mergeable` nor `statusCheckRollup`, so the state you actually care about needs a second pass — and on a real upstream PR the last commenter is nearly always a deploy-preview bot, CodeRabbit, or a security scanner, which makes both "last commenter isn't me" and `updatedAt` useless as ball-ownership signals. The skill strips bot activity first, reads `mergeStateStatus` rather than the over-reporting check rollup, then sorts by who owes the next move.
+
+Read-only. Nudges and close comments are drafted for you to read, never posted on their own.
+
+If you only want the raw list:
+
+```bash
+gh search prs --author <your-login> --state open --sort updated \
+  --json number,repository,title,updatedAt \
+  --template '{{range .}}{{.repository.nameWithOwner}}#{{.number}}  {{timeago .updatedAt}}  {{.title}}{{"\n"}}{{end}}'
+```
 
 ## Profile
 
@@ -175,7 +180,7 @@ Real contributions shipped using this workflow:
 
 Considered and rejected:
 
-- **`pipeline` skill.** The `gh search prs --author @me` one-liner above already covers it; a skill wrapper would add ceremony without insight at the contribution volume this plugin is designed for.
+- ~~**`pipeline` skill.** The `gh search prs --author @me` one-liner above already covers it.~~ **Reversed in v0.11.0**, shipped as `follow-up`. Two things the one-liner turned out not to cover: `gh search prs --json` exposes no `reviewDecision` / `mergeable` / `statusCheckRollup` (the recommended one-liner was in fact broken — it named a field that doesn't exist), and bot comments make both "last commenter" and `updatedAt` unusable as ball-ownership signals. The insight was in the noise filter, not the listing.
 - **General contribution-progress journal** (per-PR state file, session log of what happened). Most of what you'd want to persist is already in GitHub (`gh pr view --json reviews,comments,reviewDecision`), the consumer repo (`patches/*.patch` from Phase 7), the `log` skill (portfolio narrative from merged PRs), or the roadmap per-repo conventions cache (accumulated repo knowledge). A parallel side-journal creates a sync problem with GitHub and decays the moment it falls out of date. The one narrow gap — *why you bailed when no PR opened* (Phase 3 tractability gate, Phase 1 step 0a stalled-adjacent-PR) — is small enough to be a one-line append to a `CONTRIBUTIONS.md` in the consumer repo, not a skill.
 
 ## Contributing
